@@ -1,0 +1,13 @@
+{
+  "name": "vida-app",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
+    "start": "node backend/server.js",
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "migrate": "node backend/migrate-from-json.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

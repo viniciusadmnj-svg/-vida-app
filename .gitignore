@@ -1,0 +1,17 @@
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Dados locais (não vão para o git — ficam só na máquina)
+backend/data/
+
+# Variáveis de ambiente
+.env
+backend/.env
+
+# Build do frontend (Railway faz o build na nuvem)
+frontend/dist/
+
+# Logs
+*.log
+npm-debug.log*
