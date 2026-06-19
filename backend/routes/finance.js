@@ -35,6 +35,14 @@ router.put('/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+router.delete('/clear', async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    await db.deleteWhere('finance_entries', e => e.month === Number(month) && e.year === Number(year));
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     await db.delete('finance_entries', Number(req.params.id));

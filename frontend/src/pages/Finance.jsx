@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { Plus, Trash2, X, Check, Repeat, Pencil, ToggleLeft, ToggleRight, TrendingUp, Upload, FileText } from 'lucide-react';
+import { Plus, Trash2, X, Check, Repeat, Pencil, ToggleLeft, ToggleRight, TrendingUp, Upload, FileText, Eraser } from 'lucide-react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
@@ -528,7 +528,12 @@ export default function Finance() {
   };
 
   const save = async (id, data) => { await axios.put(`/api/finance/${id}`, data); load(); };
-  const del = async (id) => { if (!confirm('Deletar este lançamento?')) return; await axios.delete(`/api/finance/${id}`); load(); };
+  const del  = async (id) => { if (!confirm('Deletar este lançamento?')) return; await axios.delete(`/api/finance/${id}`); load(); };
+  const clearMonth = async () => {
+    if (!confirm(`Apagar TODOS os lançamentos de ${MONTHS[month - 1]} ${year}? Isso não pode ser desfeito.`)) return;
+    await axios.delete(`/api/finance/clear?month=${month}&year=${year}`);
+    load();
+  };
 
   const fmtK = v => { const a = Math.abs(v); return a >= 1000 ? `${(v / 1000).toFixed(1)}k` : v === 0 ? '0' : v.toFixed(0); };
 
@@ -622,6 +627,9 @@ export default function Finance() {
           <input className="input w-24" type="number" value={year} onChange={e => setYear(Number(e.target.value))} />
           <button className="btn-ghost flex items-center gap-1.5 border border-gray-200" onClick={() => setShowRecurring(true)}>
             <Repeat size={14} /> Fixas
+          </button>
+          <button className="btn-ghost flex items-center gap-1.5 border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-500" onClick={clearMonth}>
+            <Eraser size={14} /> Limpar mês
           </button>
           <button className="btn-ghost flex items-center gap-1.5 border border-brand-500/30 text-brand-500 hover:bg-brand-500/5" onClick={() => setShowImport(true)}>
             <Upload size={14} /> Importar extrato
