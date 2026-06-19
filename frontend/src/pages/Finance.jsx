@@ -221,36 +221,56 @@ function ImportModal({ onClose, month, year, onImported }) {
     return { description: rule ? rule.label : rawDesc, ruleId: rule?.id };
   };
 
-  const parseDate = (dateStr) => {
-    // DD/MM/YYYY (Nubank Brasil)
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-      const [d, m, y] = dateStr.split('/');
-      return new Date(`${y}-${m}-${d}T12:00:00`);
-    }
-    // YYYY-MM-DD (ISO)
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      return new Date(dateStr + 'T12:00:00');
-    }
-    return new Date(dateStr);
+  const parseDate = (s) => {
+    s = s.trim().replace(/^"|"$/g, '');
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const [d,m,y]=s.split('/'); return new Date(`${y}-${m}-${d}T12:00:00`); }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T12:00:00');
+    return new Date(s);
   };
 
+  const parseAmount = (s) => {
+    if (!s) return NaN;
+    s = s.trim().replace(/^"|"$/g, '');
+    // "1.234,56" ou "-130,19" → vírgula como decimal
+    if (/\d,\d/.test(s)) return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+    // "1234.56" ou "-130.19" → ponto como decimal
+    return parseFloat(s);
+  };
+
+  const splitLine = (line, sep) =>
+    sep === ';'
+      ? line.split(';').map(p => p.trim().replace(/^"|"$/g, ''))
+      : parseCSVLine(line);
+
   const parseCSV = (text, rulesArr) => {
-    const clean = text.replace(/^﻿/, '').replace(/^﻿/, '');
-    // Detecta separador: ponto-e-vírgula ou vírgula
-    const firstLine = clean.split(/\r?\n/)[0] || '';
-    const sep = firstLine.includes(';') ? ';' : ',';
+    const clean = text.replace(/^﻿/, '');
     const lines = clean.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return [];
+
+    const firstLine = lines[0];
+    const sep = firstLine.includes(';') ? ';' : ',';
+    const header = splitLine(firstLine, sep).map(h => h.toLowerCase());
+
+    // Detecta colunas pelo cabeçalho (Nubank pode ter 3 ou 4 colunas)
+    const dateCol  = header.findIndex(h => h.includes('data') || h.includes('date'));
+    const valueCol = header.findIndex(h => h.includes('valor') || h.includes('value') || h.includes('amount'));
+    const descCol  = header.findIndex(h => h.includes('descri') || h.includes('title') || h.includes('memo'));
+
+    // Fallback se cabeçalho não reconhecido: assume Data, Descrição, Valor (3 cols)
+    const dc  = dateCol  !== -1 ? dateCol  : 0;
+    const vc  = valueCol !== -1 ? valueCol : (header.length >= 3 ? header.length - 1 : 2);
+    const rc  = descCol  !== -1 ? descCol  : 1;
+
     const entries = [];
     for (let i = 1; i < lines.length; i++) {
-      const parts = sep === ';'
-        ? lines[i].split(';').map(p => p.trim().replace(/^"|"$/g, ''))
-        : parseCSVLine(lines[i]);
+      const parts = splitLine(lines[i], sep);
       if (parts.length < 3) continue;
-      const [dateStr, rawDesc, valueStr] = parts;
-      const value = parseFloat(valueStr.replace('.', '').replace(',', '.'));
+      const dateStr = parts[dc] || '';
+      const rawDesc = parts[rc] || '';
+      const valueStr = parts[vc] || '';
+      const value = parseAmount(valueStr);
       if (isNaN(value)) continue;
-      const date = parseDate(dateStr.trim());
+      const date = parseDate(dateStr);
       if (isNaN(date.getTime())) continue;
       if (date.getMonth() + 1 !== month || date.getFullYear() !== year) continue;
       const day = date.getDate();
