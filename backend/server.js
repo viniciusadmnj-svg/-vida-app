@@ -13,6 +13,7 @@ app.use('/api/summary',           require('./routes/summary'));
 app.use('/api/goals',             require('./routes/goals'));
 app.use('/api/diary',             require('./routes/diary'));
 app.use('/api/workouts',          require('./routes/workouts'));
+app.use('/api/finance/import',    require('./routes/finance_import'));
 app.use('/api/finance/recurring', require('./routes/finance_recurring'));
 app.use('/api/finance',           require('./routes/finance'));
 app.use('/api/nutrition',         require('./routes/nutrition'));

@@ -100,3 +100,10 @@ CREATE TABLE IF NOT EXISTS work_tasks (
   status     TEXT    NOT NULL DEFAULT 'a_fazer',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS finance_rules (
+  id          SERIAL PRIMARY KEY,
+  pattern     TEXT    NOT NULL DEFAULT '',
+  label       TEXT    NOT NULL DEFAULT '',
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);

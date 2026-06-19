@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { Plus, Trash2, X, Check, RefreshCw, Repeat, Pencil, ToggleLeft, ToggleRight, TrendingUp } from 'lucide-react';
+import { Plus, Trash2, X, Check, Repeat, Pencil, ToggleLeft, ToggleRight, TrendingUp, Upload, FileText } from 'lucide-react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
@@ -63,14 +63,7 @@ function EditableRow({ entry, onSave, onDelete, isToday }) {
         {entry.day}
         {isToday && <span className="ml-1 text-[9px] bg-brand-500 text-white rounded px-1 py-0.5 font-bold align-middle">HOJE</span>}
       </td>
-      <td className="table-cell">
-        <span className="text-gray-700">{entry.description}</span>
-        {entry.recurring_id && (
-          <span title="Recorrente" className="ml-1.5 text-brand-400 opacity-60">
-            <Repeat size={10} className="inline" />
-          </span>
-        )}
-      </td>
+      <td className="table-cell text-gray-700">{entry.description}</td>
       <td className="table-cell text-green-600">{entry.entrada > 0 ? fmt(entry.entrada) : '—'}</td>
       <td className="table-cell text-red-500">{entry.saida > 0 ? fmt(entry.saida) : '—'}</td>
       <td className={`table-cell font-medium ${daily >= 0 ? 'text-green-600' : 'text-red-500'}`}>{fmt(daily)}</td>
@@ -92,11 +85,7 @@ function RecurringModal({ onClose }) {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
 
-  const load = async () => {
-    const { data } = await axios.get('/api/finance/recurring');
-    setItems(data);
-  };
-
+  const load = async () => { const { data } = await axios.get('/api/finance/recurring'); setItems(data); };
   useEffect(() => { load(); }, []);
 
   const add = async (e) => {
@@ -108,40 +97,25 @@ function RecurringModal({ onClose }) {
     load();
   };
 
-  const del = async (id) => {
-    if (!confirm('Remover este recorrente?')) return;
-    await axios.delete(`/api/finance/recurring/${id}`);
-    load();
-  };
-
-  const toggleActive = async (item) => {
-    await axios.put(`/api/finance/recurring/${item.id}`, { ...item, active: !item.active });
-    load();
-  };
-
-  const startEdit = (item) => {
-    setEditingId(item.id);
-    setEditForm({ description: item.description, entrada: item.entrada || '', saida: item.saida || '', day: item.day });
-  };
-
+  const del = async (id) => { if (!confirm('Remover?')) return; await axios.delete(`/api/finance/recurring/${id}`); load(); };
+  const toggleActive = async (item) => { await axios.put(`/api/finance/recurring/${item.id}`, { ...item, active: !item.active }); load(); };
+  const startEdit = (item) => { setEditingId(item.id); setEditForm({ description: item.description, entrada: item.entrada || '', saida: item.saida || '', day: item.day }); };
   const saveEdit = async (id) => {
     await axios.put(`/api/finance/recurring/${id}`, { ...editForm, entrada: Number(editForm.entrada) || 0, saida: Number(editForm.saida) || 0, day: Number(editForm.day), active: items.find(i => i.id === id)?.active ?? 1 });
-    setEditingId(null);
-    load();
+    setEditingId(null); load();
   };
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
       <div className="card w-full max-w-2xl max-h-[85vh] flex flex-col shadow-xl">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <Repeat size={16} className="text-brand-500" />
-            <h2 className="font-semibold text-gray-900">Lançamentos recorrentes</h2>
+            <h2 className="font-semibold text-gray-900">Despesas & Receitas Fixas</h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
         </div>
-        <p className="text-xs text-gray-400 mb-4">Entradas e saídas fixas mensais. Use <strong className="text-gray-600">"Aplicar ao mês"</strong> para inserí-las no período desejado.</p>
-
+        <p className="text-xs text-gray-400 mb-4">Aparecem automaticamente na seção de fixas, sem entrar no fluxo diário.</p>
         <div className="flex-1 overflow-y-auto">
           {items.length > 0 && (
             <table className="w-full text-left mb-4">
@@ -151,7 +125,7 @@ function RecurringModal({ onClose }) {
                   <th className="table-cell font-medium">Descrição</th>
                   <th className="table-cell font-medium text-green-600">Entrada</th>
                   <th className="table-cell font-medium text-red-500">Saída</th>
-                  <th className="table-cell font-medium w-24"></th>
+                  <th className="table-cell w-24"></th>
                 </tr>
               </thead>
               <tbody>
@@ -189,10 +163,9 @@ function RecurringModal({ onClose }) {
             </table>
           )}
           {items.length === 0 && !adding && (
-            <p className="text-center text-gray-400 py-8 text-sm">Nenhum recorrente cadastrado ainda.</p>
+            <p className="text-center text-gray-400 py-8 text-sm">Nenhuma despesa/receita fixa cadastrada.</p>
           )}
         </div>
-
         {adding ? (
           <form onSubmit={add} className="flex flex-wrap gap-2 pt-4 border-t border-gray-100 mt-2">
             <input className="input w-16" type="number" min="1" max="31" placeholder="Dia*" value={form.day} onChange={e => setForm(f => ({ ...f, day: e.target.value }))} required />
@@ -206,8 +179,255 @@ function RecurringModal({ onClose }) {
           </form>
         ) : (
           <button className="btn-ghost flex items-center gap-1.5 mt-3 self-start" onClick={() => setAdding(true)}>
-            <Plus size={14} /> Novo recorrente
+            <Plus size={14} /> Nova fixa
           </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ImportModal({ onClose, month, year, onImported }) {
+  const [rules, setRules] = useState([]);
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [showRulesMgr, setShowRulesMgr] = useState(false);
+  const [editingRule, setEditingRule] = useState(null);
+  const [ruleForm, setRuleForm] = useState({ pattern: '', label: '' });
+  const fileRef = useRef();
+
+  const loadRules = async () => {
+    const { data } = await axios.get('/api/finance/import/rules');
+    setRules(data);
+  };
+
+  useEffect(() => { loadRules(); }, []);
+
+  function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (const ch of line) {
+      if (ch === '"') { inQuotes = !inQuotes; }
+      else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+      else { current += ch; }
+    }
+    result.push(current.trim());
+    return result;
+  }
+
+  const applyRules = (rawDesc, rulesArr) => {
+    const rule = rulesArr.find(r => rawDesc.toLowerCase().includes(r.pattern.toLowerCase()));
+    return { description: rule ? rule.label : rawDesc, ruleId: rule?.id };
+  };
+
+  const parseCSV = (text, rulesArr) => {
+    const clean = text.replace(/^﻿/, '');
+    const lines = clean.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return [];
+    const entries = [];
+    for (let i = 1; i < lines.length; i++) {
+      const parts = parseCSVLine(lines[i]);
+      if (parts.length < 3) continue;
+      const [dateStr, rawDesc, valueStr] = parts;
+      const value = parseFloat(valueStr.replace(',', '.'));
+      if (isNaN(value)) continue;
+      const date = new Date(dateStr + 'T12:00:00');
+      if (isNaN(date.getTime())) continue;
+      if (date.getMonth() + 1 !== month || date.getFullYear() !== year) continue;
+      const day = date.getDate();
+      const entrada = value > 0 ? value : 0;
+      const saida   = value < 0 ? Math.abs(value) : 0;
+      const { description, ruleId } = applyRules(rawDesc, rulesArr);
+      entries.push({ day, rawDesc, description, entrada, saida, ruleId, include: true, newRule: false });
+    }
+    return entries.sort((a, b) => a.day - b.day);
+  };
+
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setPreview(parseCSV(ev.target.result, rules));
+    reader.readAsText(file, 'UTF-8');
+  };
+
+  const confirm = async () => {
+    setLoading(true);
+    try {
+      const toSave = preview.filter(e => e.include);
+      for (const e of toSave.filter(e => e.newRule && !e.ruleId)) {
+        await axios.post('/api/finance/import/rules', { pattern: e.rawDesc, label: e.description });
+      }
+      await axios.post('/api/finance/import/confirm', { entries: toSave, month, year });
+      onImported();
+      onClose();
+    } finally { setLoading(false); }
+  };
+
+  const saveRule = async (e) => {
+    e.preventDefault();
+    if (editingRule?.id) {
+      await axios.put(`/api/finance/import/rules/${editingRule.id}`, ruleForm);
+    } else {
+      await axios.post('/api/finance/import/rules', ruleForm);
+    }
+    setEditingRule(null);
+    setRuleForm({ pattern: '', label: '' });
+    loadRules();
+  };
+
+  const deleteRule = async (id) => {
+    if (!confirm('Remover regra?')) return;
+    await axios.delete(`/api/finance/import/rules/${id}`);
+    loadRules();
+  };
+
+  const includedCount = preview?.filter(e => e.include).length || 0;
+
+  if (showRulesMgr) {
+    return (
+      <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+        <div className="card w-full max-w-xl max-h-[85vh] flex flex-col shadow-xl">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900">Regras de Conciliação</h2>
+            <button onClick={() => setShowRulesMgr(false)} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
+          </div>
+          <p className="text-xs text-gray-400 mb-4">Quando o extrato contiver o <strong>padrão</strong>, a descrição é substituída pelo <strong>nome amigável</strong>.</p>
+          <div className="flex-1 overflow-y-auto">
+            {rules.length === 0 && !editingRule && (
+              <p className="text-center text-gray-400 py-6 text-sm">Nenhuma regra cadastrada ainda.</p>
+            )}
+            {rules.map(r => (
+              <div key={r.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0 group">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-400 font-mono truncate">{r.pattern}</p>
+                  <p className="text-sm text-gray-700 font-medium">{r.label}</p>
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+                  <button onClick={() => { setEditingRule(r); setRuleForm({ pattern: r.pattern, label: r.label }); }} className="text-gray-400 hover:text-brand-500 p-1"><Pencil size={13} /></button>
+                  <button onClick={() => deleteRule(r.id)} className="text-gray-400 hover:text-red-400 p-1"><Trash2 size={13} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={saveRule} className="pt-4 border-t border-gray-100 mt-2 flex flex-col gap-2">
+            <p className="text-xs font-medium text-gray-600">{editingRule?.id ? 'Editar regra' : 'Nova regra'}</p>
+            <input className="input text-sm" placeholder='Padrão (ex: "PIX FULANO")' value={ruleForm.pattern} onChange={e => setRuleForm(f => ({ ...f, pattern: e.target.value }))} required />
+            <input className="input text-sm" placeholder='Nome amigável (ex: "Aluguel")' value={ruleForm.label} onChange={e => setRuleForm(f => ({ ...f, label: e.target.value }))} required />
+            <div className="flex gap-2">
+              <button type="submit" className="btn-primary text-sm">Salvar</button>
+              {editingRule && <button type="button" className="btn-ghost text-sm" onClick={() => { setEditingRule(null); setRuleForm({ pattern: '', label: '' }); }}>Cancelar</button>}
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+      <div className="card w-full max-w-3xl max-h-[90vh] flex flex-col shadow-xl">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Upload size={16} className="text-brand-500" />
+            <h2 className="font-semibold text-gray-900">Importar Extrato — Nubank</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowRulesMgr(true)} className="text-xs text-brand-500 hover:underline">Gerenciar regras ({rules.length})</button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
+          </div>
+        </div>
+
+        {!preview ? (
+          <div className="flex flex-col items-center gap-4 py-10">
+            <div className="w-16 h-16 rounded-2xl bg-brand-50 flex items-center justify-center">
+              <FileText size={28} className="text-brand-400" />
+            </div>
+            <div className="text-center">
+              <p className="text-gray-700 font-medium mb-1">Selecione o CSV exportado do Nubank</p>
+              <p className="text-xs text-gray-400">App Nubank → Perfil → Extrato → Exportar extrato em CSV</p>
+              <p className="text-xs text-gray-400 mt-1">Só lançamentos de <strong>{MONTHS[month - 1]} {year}</strong> serão importados</p>
+            </div>
+            <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
+            <button className="btn-primary" onClick={() => fileRef.current?.click()}>Escolher arquivo CSV</button>
+          </div>
+        ) : preview.length === 0 ? (
+          <div className="text-center py-10">
+            <p className="text-gray-500 mb-3">Nenhum lançamento de {MONTHS[month - 1]} {year} encontrado no arquivo.</p>
+            <button className="btn-ghost text-sm" onClick={() => { setPreview(null); fileRef.current.value = ''; }}>Tentar outro arquivo</button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-gray-600">
+                <span className="font-semibold text-gray-900">{preview.length}</span> lançamentos · <span className="text-brand-600 font-medium">{includedCount} selecionados</span>
+              </p>
+              <button className="text-xs text-gray-400 hover:text-gray-600 underline" onClick={() => { setPreview(null); fileRef.current.value = ''; }}>Trocar arquivo</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto border border-gray-100 rounded-xl">
+              <table className="w-full text-left text-sm">
+                <thead className="sticky top-0 bg-gray-50 border-b border-gray-100">
+                  <tr className="text-xs text-gray-400">
+                    <th className="table-cell w-8">
+                      <input type="checkbox"
+                        checked={preview.every(e => e.include)}
+                        onChange={v => setPreview(p => p.map(x => ({ ...x, include: v.target.checked })))}
+                        className="rounded" />
+                    </th>
+                    <th className="table-cell w-10">Dia</th>
+                    <th className="table-cell">Descrição</th>
+                    <th className="table-cell text-green-600 w-28">Entrada</th>
+                    <th className="table-cell text-red-500 w-28">Saída</th>
+                    <th className="table-cell w-16 text-center" title="Criar regra para reconhecer automaticamente">Regra</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((e, i) => (
+                    <tr key={i} className={`border-b border-gray-50 last:border-0 ${!e.include ? 'opacity-40' : 'hover:bg-gray-50/50'}`}>
+                      <td className="table-cell">
+                        <input type="checkbox" checked={e.include}
+                          onChange={() => setPreview(p => p.map((x, j) => j === i ? { ...x, include: !x.include } : x))}
+                          className="rounded" />
+                      </td>
+                      <td className="table-cell text-gray-400 font-medium">{e.day}</td>
+                      <td className="table-cell">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            className="input py-0.5 text-xs flex-1 min-w-0"
+                            value={e.description}
+                            onChange={ev => setPreview(p => p.map((x, j) => j === i ? { ...x, description: ev.target.value } : x))}
+                          />
+                          {e.ruleId && <span className="text-[9px] text-brand-400 whitespace-nowrap shrink-0">✓ regra</span>}
+                        </div>
+                      </td>
+                      <td className="table-cell text-green-600 text-xs">{e.entrada > 0 ? fmt(e.entrada) : <span className="text-gray-200">—</span>}</td>
+                      <td className="table-cell text-red-500 text-xs">{e.saida > 0 ? fmt(e.saida) : <span className="text-gray-200">—</span>}</td>
+                      <td className="table-cell text-center">
+                        {!e.ruleId && (
+                          <input type="checkbox" checked={e.newRule}
+                            title="Salvar como regra de conciliação"
+                            onChange={() => setPreview(p => p.map((x, j) => j === i ? { ...x, newRule: !x.newRule } : x))}
+                            className="rounded" />
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-gray-100 mt-3">
+              <p className="text-xs text-gray-400">Marque "Regra" para reconhecer automaticamente na próxima importação</p>
+              <div className="flex gap-2">
+                <button className="btn-ghost" onClick={onClose}>Cancelar</button>
+                <button className="btn-primary" onClick={confirm} disabled={loading || includedCount === 0}>
+                  {loading ? 'Salvando...' : `Confirmar ${includedCount} lançamento${includedCount !== 1 ? 's' : ''}`}
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -219,22 +439,26 @@ export default function Finance() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [entries, setEntries] = useState([]);
+  const [recurring, setRecurring] = useState([]);
   const [form, setForm] = useState({ day: '', description: '', entrada: '', saida: '' });
   const [adding, setAdding] = useState(false);
   const [showRecurring, setShowRecurring] = useState(false);
-  const [applyMsg, setApplyMsg] = useState(null);
+  const [showImport, setShowImport] = useState(false);
 
   const load = async () => {
-    const { data } = await axios.get(`/api/finance?month=${month}&year=${year}`);
-    let saldo = 0;
-    const withSaldo = data.map(e => {
-      saldo += (e.entrada || 0) - (e.saida || 0);
-      return { ...e, _saldo: saldo };
-    });
-    setEntries(withSaldo);
+    const [{ data: ent }, { data: rec }] = await Promise.all([
+      axios.get(`/api/finance?month=${month}&year=${year}`),
+      axios.get('/api/finance/recurring'),
+    ]);
+    setEntries(ent);
+    setRecurring(rec);
   };
 
   useEffect(() => { load(); }, [month, year]);
+
+  // Só entradas variáveis (sem recurring_id)
+  const variableEntries = useMemo(() => entries.filter(e => !e.recurring_id), [entries]);
+  const activeRecurring = useMemo(() => recurring.filter(r => r.active), [recurring]);
 
   const add = async (e) => {
     e.preventDefault();
@@ -246,33 +470,25 @@ export default function Finance() {
   };
 
   const save = async (id, data) => { await axios.put(`/api/finance/${id}`, data); load(); };
-  const del = async (id) => {
-    if (!confirm('Deletar este lançamento?')) return;
-    await axios.delete(`/api/finance/${id}`);
-    load();
-  };
+  const del = async (id) => { if (!confirm('Deletar este lançamento?')) return; await axios.delete(`/api/finance/${id}`); load(); };
 
-  const applyRecurring = async () => {
-    const { data } = await axios.post('/api/finance/recurring/apply', { month, year });
-    load();
-    setApplyMsg(data.inserted === 0
-      ? 'Todos os recorrentes já foram aplicados neste mês.'
-      : `${data.inserted} recorrente${data.inserted > 1 ? 's' : ''} inserido${data.inserted > 1 ? 's' : ''}!${data.skipped > 0 ? ` (${data.skipped} já existia${data.skipped > 1 ? 'm' : ''})` : ''}`
-    );
-    setTimeout(() => setApplyMsg(null), 3000);
-  };
+  const fmtK = v => { const a = Math.abs(v); return a >= 1000 ? `${(v / 1000).toFixed(1)}k` : v === 0 ? '0' : v.toFixed(0); };
 
-  const totalEntrada = entries.reduce((s, e) => s + (e.entrada || 0), 0);
-  const totalSaida   = entries.reduce((s, e) => s + (e.saida   || 0), 0);
-  const resultado = totalEntrada - totalSaida;
-
+  // Gráfico inclui variáveis + recorrentes
   const cashflowData = useMemo(() => {
     const daysInMonth = new Date(year, month, 0).getDate();
     const byDay = {};
-    entries.forEach(e => {
+    variableEntries.forEach(e => {
       if (!byDay[e.day]) byDay[e.day] = { entrada: 0, saida: 0 };
       byDay[e.day].entrada += (e.entrada || 0);
       byDay[e.day].saida   += (e.saida   || 0);
+    });
+    activeRecurring.forEach(r => {
+      if (r.day >= 1 && r.day <= daysInMonth) {
+        if (!byDay[r.day]) byDay[r.day] = { entrada: 0, saida: 0 };
+        byDay[r.day].entrada += (r.entrada || 0);
+        byDay[r.day].saida   += (r.saida   || 0);
+      }
     });
     let saldo = 0;
     return Array.from({ length: daysInMonth }, (_, i) => {
@@ -281,25 +497,22 @@ export default function Finance() {
       saldo += d.entrada - d.saida;
       return { dia: day, entrada: d.entrada, saida: d.saida, saldo };
     });
-  }, [entries, month, year]);
+  }, [variableEntries, activeRecurring, month, year]);
 
-  const fmtK = v => {
-    const abs = Math.abs(v);
-    if (abs >= 1000) return `${(v / 1000).toFixed(1)}k`;
-    return v === 0 ? '0' : v.toFixed(0);
-  };
-
-  // Gera uma linha para cada dia do mês, com saldo acumulado mesmo em dias sem lançamento
+  // Tabela diária: só variáveis, mas saldo acumula recorrentes por dia
   const tableRows = useMemo(() => {
     const daysInMonth = new Date(year, month, 0).getDate();
     const byDay = {};
-    entries.forEach(e => {
+    variableEntries.forEach(e => {
       if (!byDay[e.day]) byDay[e.day] = [];
       byDay[e.day].push(e);
     });
     let runSaldo = 0;
     const rows = [];
     for (let d = 1; d <= daysInMonth; d++) {
+      activeRecurring.filter(r => r.day === d).forEach(r => {
+        runSaldo += (r.entrada || 0) - (r.saida || 0);
+      });
       const dayEntries = byDay[d] || [];
       if (dayEntries.length > 0) {
         dayEntries.forEach(e => {
@@ -311,10 +524,18 @@ export default function Finance() {
       }
     }
     return rows;
-  }, [entries, month, year]);
+  }, [variableEntries, activeRecurring, month, year]);
 
-  const todayDay = new Date().getDate();
-  const isCurrentMonth = month === new Date().getMonth() + 1 && year === new Date().getFullYear();
+  const todayDay = now.getDate();
+  const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
+
+  const varEntrada   = variableEntries.reduce((s, e) => s + (e.entrada || 0), 0);
+  const varSaida     = variableEntries.reduce((s, e) => s + (e.saida   || 0), 0);
+  const recEntrada   = activeRecurring.reduce((s, r) => s + (r.entrada || 0), 0);
+  const recSaida     = activeRecurring.reduce((s, r) => s + (r.saida   || 0), 0);
+  const totalEntrada = varEntrada + recEntrada;
+  const totalSaida   = varSaida   + recSaida;
+  const resultado    = totalEntrada - totalSaida;
 
   return (
     <div>
@@ -326,22 +547,16 @@ export default function Finance() {
           </select>
           <input className="input w-24" type="number" value={year} onChange={e => setYear(Number(e.target.value))} />
           <button className="btn-ghost flex items-center gap-1.5 border border-gray-200" onClick={() => setShowRecurring(true)}>
-            <Repeat size={14} /> Recorrentes
+            <Repeat size={14} /> Fixas
           </button>
-          <button className="btn-ghost flex items-center gap-1.5 border border-brand-500/30 text-brand-500 hover:bg-brand-500/5" onClick={applyRecurring}>
-            <RefreshCw size={14} /> Aplicar ao mês
+          <button className="btn-ghost flex items-center gap-1.5 border border-brand-500/30 text-brand-500 hover:bg-brand-500/5" onClick={() => setShowImport(true)}>
+            <Upload size={14} /> Importar extrato
           </button>
           <button className="btn-primary flex items-center gap-1.5" onClick={() => setAdding(!adding)}>
             <Plus size={15} /> Lançamento
           </button>
         </div>
       </div>
-
-      {applyMsg && (
-        <div className="mb-4 px-4 py-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-600 text-sm">
-          {applyMsg}
-        </div>
-      )}
 
       {adding && (
         <form onSubmit={add} className="card mb-4 flex flex-wrap gap-2">
@@ -356,61 +571,35 @@ export default function Finance() {
         </form>
       )}
 
-      {/* Fluxo de caixa diário */}
+      {/* Gráfico de fluxo */}
       <div className="card mb-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <TrendingUp size={15} className="text-brand-500" />
-            <h2 className="font-semibold text-gray-900 text-sm">
-              Fluxo de Caixa — {MONTHS[month - 1]} {year}
-            </h2>
+            <h2 className="font-semibold text-gray-900 text-sm">Fluxo de Caixa — {MONTHS[month - 1]} {year}</h2>
           </div>
           <div className="flex gap-3 text-xs text-gray-400">
-            <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-sm bg-green-400 inline-block" />Entrada
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block" />Saída
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-4 h-0.5 bg-brand-500 inline-block rounded" />Saldo
-            </span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-400 inline-block" />Entrada</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block" />Saída</span>
+            <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-brand-500 inline-block rounded" />Saldo</span>
           </div>
         </div>
         <ResponsiveContainer width="100%" height={220}>
           <ComposedChart data={cashflowData} barCategoryGap="30%" barGap={2}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
-            <XAxis
-              dataKey="dia"
-              tick={{ fill: '#9ca3af', fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-              interval={cashflowData.length > 20 ? 4 : 1}
-            />
-            <YAxis
-              tick={{ fill: '#9ca3af', fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={fmtK}
-              width={42}
-            />
+            <XAxis dataKey="dia" tick={{ fill: '#9ca3af', fontSize: 10 }} axisLine={false} tickLine={false} interval={cashflowData.length > 20 ? 4 : 1} />
+            <YAxis tick={{ fill: '#9ca3af', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={fmtK} width={42} />
             <ReferenceLine y={0} stroke="rgba(0,0,0,0.08)" />
             <Tooltip content={<CashflowTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
             <Bar dataKey="entrada" fill="#4ade80" radius={[3, 3, 0, 0]} />
             <Bar dataKey="saida"   fill="#f87171" radius={[3, 3, 0, 0]} />
-            <Line
-              type="monotone"
-              dataKey="saldo"
-              stroke="#6366f1"
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4, fill: '#6366f1' }}
-            />
+            <Line type="monotone" dataKey="saldo" stroke="#6366f1" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#6366f1' }} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="card overflow-x-auto">
+      {/* Tabela de lançamentos variáveis */}
+      <div className="card overflow-x-auto mb-4">
         <table className="w-full text-left">
           <thead>
             <tr className="text-xs text-gray-400 border-b border-gray-100">
@@ -420,7 +609,7 @@ export default function Finance() {
               <th className="table-cell font-medium text-red-500">Saída</th>
               <th className="table-cell font-medium">Diário</th>
               <th className="table-cell font-medium">Saldo</th>
-              <th className="table-cell font-medium w-16"></th>
+              <th className="table-cell w-16"></th>
             </tr>
           </thead>
           <tbody>
@@ -431,10 +620,7 @@ export default function Finance() {
               }
               const isToday = isCurrentMonth && row.day === todayDay;
               return (
-                <tr
-                  key={`day-${row.day}`}
-                  className={`group transition-colors ${isToday ? 'bg-brand-50/60' : 'hover:bg-gray-50/30'}`}
-                >
+                <tr key={`day-${row.day}`} className={`transition-colors ${isToday ? 'bg-brand-50/60' : 'hover:bg-gray-50/30'}`}>
                   <td className={`table-cell font-medium ${isToday ? 'text-brand-600' : 'text-gray-300'}`}>
                     {row.day}
                     {isToday && <span className="ml-1 text-[9px] bg-brand-500 text-white rounded px-1 py-0.5 font-bold align-middle">HOJE</span>}
@@ -443,9 +629,7 @@ export default function Finance() {
                   <td className="table-cell text-gray-200">—</td>
                   <td className="table-cell text-gray-200">—</td>
                   <td className="table-cell text-gray-200">—</td>
-                  <td className={`table-cell font-medium ${row.saldo < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-                    {fmt(row.saldo)}
-                  </td>
+                  <td className={`table-cell font-medium ${row.saldo < 0 ? 'text-red-400' : 'text-gray-400'}`}>{fmt(row.saldo)}</td>
                   <td className="table-cell" />
                 </tr>
               );
@@ -454,7 +638,43 @@ export default function Finance() {
         </table>
       </div>
 
-      <div className="card mt-4 flex flex-wrap gap-6">
+      {/* Despesas & Receitas Fixas */}
+      {activeRecurring.length > 0 && (
+        <div className="card mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Repeat size={14} className="text-brand-400" />
+            <h3 className="font-semibold text-gray-800 text-sm">Despesas & Receitas Fixas</h3>
+            <span className="text-xs text-gray-400">· não entram no fluxo diário</span>
+          </div>
+          <table className="w-full text-left">
+            <thead>
+              <tr className="text-xs text-gray-400 border-b border-gray-100">
+                <th className="table-cell font-medium">Dia</th>
+                <th className="table-cell font-medium">Descrição</th>
+                <th className="table-cell font-medium text-green-600">Entrada</th>
+                <th className="table-cell font-medium text-red-500">Saída</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...activeRecurring].sort((a, b) => a.day - b.day).map(r => (
+                <tr key={r.id} className="hover:bg-gray-50 border-b border-gray-50 last:border-0">
+                  <td className="table-cell text-gray-400">{r.day}</td>
+                  <td className="table-cell text-gray-700">{r.description}</td>
+                  <td className="table-cell text-green-600">{r.entrada > 0 ? fmt(r.entrada) : '—'}</td>
+                  <td className="table-cell text-red-500">{r.saida > 0 ? fmt(r.saida) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="flex justify-end gap-6 pt-3 mt-2 border-t border-gray-100 text-xs">
+            {recEntrada > 0 && <span className="text-green-600 font-medium">Entradas fixas: {fmt(recEntrada)}</span>}
+            {recSaida   > 0 && <span className="text-red-500 font-medium">Saídas fixas: {fmt(recSaida)}</span>}
+          </div>
+        </div>
+      )}
+
+      {/* Resumo */}
+      <div className="card flex flex-wrap gap-6">
         <div>
           <p className="text-xs text-gray-400 mb-1">Total entradas</p>
           <p className="text-lg font-semibold text-green-600">{fmt(totalEntrada)}</p>
@@ -469,7 +689,8 @@ export default function Finance() {
         </div>
       </div>
 
-      {showRecurring && <RecurringModal onClose={() => setShowRecurring(false)} />}
+      {showRecurring && <RecurringModal onClose={() => { setShowRecurring(false); load(); }} />}
+      {showImport && <ImportModal month={month} year={year} onClose={() => setShowImport(false)} onImported={load} />}
     </div>
   );
 }
