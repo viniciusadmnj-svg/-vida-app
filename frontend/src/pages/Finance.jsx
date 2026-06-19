@@ -537,7 +537,7 @@ export default function Finance() {
     });
   }, [variableEntries, activeRecurring, month, year]);
 
-  // Tabela diária: só variáveis, mas saldo acumula recorrentes por dia
+  // Tabela diária: só lançamentos variáveis, saldo só conta variáveis
   const tableRows = useMemo(() => {
     const daysInMonth = new Date(year, month, 0).getDate();
     const byDay = {};
@@ -548,9 +548,6 @@ export default function Finance() {
     let runSaldo = 0;
     const rows = [];
     for (let d = 1; d <= daysInMonth; d++) {
-      activeRecurring.filter(r => r.day === d).forEach(r => {
-        runSaldo += (r.entrada || 0) - (r.saida || 0);
-      });
       const dayEntries = byDay[d] || [];
       if (dayEntries.length > 0) {
         dayEntries.forEach(e => {
@@ -562,7 +559,7 @@ export default function Finance() {
       }
     }
     return rows;
-  }, [variableEntries, activeRecurring, month, year]);
+  }, [variableEntries, month, year]);
 
   const todayDay = now.getDate();
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
