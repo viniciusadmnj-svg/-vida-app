@@ -7,7 +7,8 @@ import {
 } from 'recharts';
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-const fmt = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const fmt  = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const n    = (v) => Number(v) || 0;
 
 function CashflowTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -28,12 +29,14 @@ function CashflowTooltip({ active, payload, label }) {
   );
 }
 
+// Linha de lançamento variável (extrato / manual)
+// Entrada → coluna Entrada | Saída → coluna Diário (despesa do dia)
 function EditableRow({ entry, onSave, onDelete, isToday }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ day: entry.day, description: entry.description, entrada: entry.entrada || '', saida: entry.saida || '' });
 
   const save = async () => {
-    await onSave(entry.id, { ...form, entrada: Number(form.entrada) || 0, saida: Number(form.saida) || 0 });
+    await onSave(entry.id, { ...form, entrada: n(form.entrada), saida: n(form.saida) });
     setEditing(false);
   };
 
@@ -42,9 +45,9 @@ function EditableRow({ entry, onSave, onDelete, isToday }) {
       <tr className="bg-gray-50">
         <td className="table-cell"><input className="input py-1 w-14" type="number" min="1" max="31" value={form.day} onChange={e => setForm(f => ({ ...f, day: e.target.value }))} /></td>
         <td className="table-cell"><input className="input py-1" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></td>
-        <td className="table-cell"><input className="input py-1 w-28" type="number" step="0.01" placeholder="0,00" value={form.entrada} onChange={e => setForm(f => ({ ...f, entrada: e.target.value }))} /></td>
-        <td className="table-cell"><input className="input py-1 w-28" type="number" step="0.01" placeholder="0,00" value={form.saida} onChange={e => setForm(f => ({ ...f, saida: e.target.value }))} /></td>
-        <td className="table-cell text-gray-400">—</td>
+        <td className="table-cell"><input className="input py-1 w-28" type="number" step="0.01" placeholder="Entrada" value={form.entrada} onChange={e => setForm(f => ({ ...f, entrada: e.target.value }))} /></td>
+        <td className="table-cell text-gray-300">—</td>
+        <td className="table-cell"><input className="input py-1 w-28" type="number" step="0.01" placeholder="Saída" value={form.saida} onChange={e => setForm(f => ({ ...f, saida: e.target.value }))} /></td>
         <td className="table-cell text-gray-400">—</td>
         <td className="table-cell">
           <div className="flex gap-1">
@@ -56,7 +59,6 @@ function EditableRow({ entry, onSave, onDelete, isToday }) {
     );
   }
 
-  const daily = (entry.entrada || 0) - (entry.saida || 0);
   return (
     <tr className={`group ${isToday ? 'bg-brand-50/60' : 'hover:bg-gray-50'}`}>
       <td className={`table-cell font-medium ${isToday ? 'text-brand-600' : 'text-gray-500'}`}>
@@ -64,16 +66,37 @@ function EditableRow({ entry, onSave, onDelete, isToday }) {
         {isToday && <span className="ml-1 text-[9px] bg-brand-500 text-white rounded px-1 py-0.5 font-bold align-middle">HOJE</span>}
       </td>
       <td className="table-cell text-gray-700">{entry.description}</td>
-      <td className="table-cell text-green-600">{entry.entrada > 0 ? fmt(entry.entrada) : '—'}</td>
-      <td className="table-cell text-red-500">{entry.saida > 0 ? fmt(entry.saida) : '—'}</td>
-      <td className={`table-cell font-medium ${daily >= 0 ? 'text-green-600' : 'text-red-500'}`}>{fmt(daily)}</td>
-      <td className={`table-cell font-semibold ${entry._saldo < 0 ? 'text-red-500' : 'text-gray-800'}`}>{fmt(entry._saldo)}</td>
+      <td className="table-cell text-green-600">{n(entry.entrada) > 0 ? fmt(n(entry.entrada)) : '—'}</td>
+      <td className="table-cell text-gray-200">—</td>
+      <td className={`table-cell font-medium ${n(entry.saida) > 0 ? 'text-red-500' : 'text-gray-300'}`}>
+        {n(entry.saida) > 0 ? `-${fmt(n(entry.saida))}` : '—'}
+      </td>
+      <td className={`table-cell font-semibold ${n(entry._saldo) < 0 ? 'text-red-500' : 'text-gray-800'}`}>{fmt(n(entry._saldo))}</td>
       <td className="table-cell">
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button onClick={() => setEditing(true)} className="text-gray-400 hover:text-brand-500 p-1"><Pencil size={13} /></button>
           <button onClick={() => onDelete(entry.id)} className="text-gray-400 hover:text-red-400 p-1"><Trash2 size={13} /></button>
         </div>
       </td>
+    </tr>
+  );
+}
+
+// Linha de despesa/receita fixa (recorrente)
+// Entrada → coluna Entrada | Saída → coluna Saída | Diário → sempre —
+function RecurringRow({ rec, saldo }) {
+  return (
+    <tr className="group hover:bg-gray-50/80 bg-indigo-50/20">
+      <td className="table-cell text-gray-400 font-medium">{rec.day}</td>
+      <td className="table-cell">
+        <span className="text-gray-600">{rec.description}</span>
+        <Repeat size={10} className="inline ml-1.5 text-brand-400 opacity-60" />
+      </td>
+      <td className="table-cell text-green-600">{n(rec.entrada) > 0 ? fmt(n(rec.entrada)) : '—'}</td>
+      <td className="table-cell text-red-500">{n(rec.saida) > 0 ? fmt(n(rec.saida)) : '—'}</td>
+      <td className="table-cell text-gray-200">—</td>
+      <td className={`table-cell font-semibold ${saldo < 0 ? 'text-red-500' : 'text-gray-800'}`}>{fmt(saldo)}</td>
+      <td className="table-cell" />
     </tr>
   );
 }
@@ -91,7 +114,7 @@ function RecurringModal({ onClose }) {
   const add = async (e) => {
     e.preventDefault();
     if (!form.day || !form.description) return;
-    await axios.post('/api/finance/recurring', { ...form, entrada: Number(form.entrada) || 0, saida: Number(form.saida) || 0, day: Number(form.day) });
+    await axios.post('/api/finance/recurring', { ...form, entrada: n(form.entrada), saida: n(form.saida), day: n(form.day) });
     setForm({ description: '', entrada: '', saida: '', day: '' });
     setAdding(false);
     load();
@@ -101,7 +124,7 @@ function RecurringModal({ onClose }) {
   const toggleActive = async (item) => { await axios.put(`/api/finance/recurring/${item.id}`, { ...item, active: !item.active }); load(); };
   const startEdit = (item) => { setEditingId(item.id); setEditForm({ description: item.description, entrada: item.entrada || '', saida: item.saida || '', day: item.day }); };
   const saveEdit = async (id) => {
-    await axios.put(`/api/finance/recurring/${id}`, { ...editForm, entrada: Number(editForm.entrada) || 0, saida: Number(editForm.saida) || 0, day: Number(editForm.day), active: items.find(i => i.id === id)?.active ?? 1 });
+    await axios.put(`/api/finance/recurring/${id}`, { ...editForm, entrada: n(editForm.entrada), saida: n(editForm.saida), day: n(editForm.day), active: items.find(i => i.id === id)?.active ?? 1 });
     setEditingId(null); load();
   };
 
@@ -115,7 +138,7 @@ function RecurringModal({ onClose }) {
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
         </div>
-        <p className="text-xs text-gray-400 mb-4">Aparecem automaticamente na seção de fixas, sem entrar no fluxo diário.</p>
+        <p className="text-xs text-gray-400 mb-4">Aparecem na coluna <strong>Saída</strong> (fixas) ou <strong>Entrada</strong> do fluxo diário, com ícone <Repeat size={10} className="inline text-brand-400" />.</p>
         <div className="flex-1 overflow-y-auto">
           {items.length > 0 && (
             <table className="w-full text-left mb-4">
@@ -146,8 +169,8 @@ function RecurringModal({ onClose }) {
                   <tr key={item.id} className={`group hover:bg-gray-50 ${!item.active ? 'opacity-40' : ''}`}>
                     <td className="table-cell text-gray-400">{item.day}</td>
                     <td className="table-cell text-gray-700">{item.description}</td>
-                    <td className="table-cell text-green-600">{item.entrada > 0 ? fmt(item.entrada) : '—'}</td>
-                    <td className="table-cell text-red-500">{item.saida > 0 ? fmt(item.saida) : '—'}</td>
+                    <td className="table-cell text-green-600">{n(item.entrada) > 0 ? fmt(n(item.entrada)) : '—'}</td>
+                    <td className="table-cell text-red-500">{n(item.saida) > 0 ? fmt(n(item.saida)) : '—'}</td>
                     <td className="table-cell">
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => toggleActive(item)} className="text-gray-400 hover:text-brand-500 p-1">
@@ -231,9 +254,7 @@ function ImportModal({ onClose, month, year, onImported }) {
   const parseAmount = (s) => {
     if (!s) return NaN;
     s = s.trim().replace(/^"|"$/g, '');
-    // "1.234,56" ou "-130,19" → vírgula como decimal
     if (/\d,\d/.test(s)) return parseFloat(s.replace(/\./g, '').replace(',', '.'));
-    // "1234.56" ou "-130.19" → ponto como decimal
     return parseFloat(s);
   };
 
@@ -251,15 +272,13 @@ function ImportModal({ onClose, month, year, onImported }) {
     const sep = firstLine.includes(';') ? ';' : ',';
     const header = splitLine(firstLine, sep).map(h => h.toLowerCase());
 
-    // Detecta colunas pelo cabeçalho (Nubank pode ter 3 ou 4 colunas)
     const dateCol  = header.findIndex(h => h.includes('data') || h.includes('date'));
     const valueCol = header.findIndex(h => h.includes('valor') || h.includes('value') || h.includes('amount'));
     const descCol  = header.findIndex(h => h.includes('descri') || h.includes('title') || h.includes('memo'));
 
-    // Fallback se cabeçalho não reconhecido: assume Data, Descrição, Valor (3 cols)
-    const dc  = dateCol  !== -1 ? dateCol  : 0;
-    const vc  = valueCol !== -1 ? valueCol : (header.length >= 3 ? header.length - 1 : 2);
-    const rc  = descCol  !== -1 ? descCol  : 1;
+    const dc = dateCol  !== -1 ? dateCol  : 0;
+    const vc = valueCol !== -1 ? valueCol : (header.length >= 3 ? header.length - 1 : 2);
+    const rc = descCol  !== -1 ? descCol  : 1;
 
     const entries = [];
     for (let i = 1; i < lines.length; i++) {
@@ -494,14 +513,15 @@ export default function Finance() {
 
   useEffect(() => { load(); }, [month, year]);
 
-  // Só entradas variáveis (sem recurring_id)
+  // Lançamentos variáveis (sem recurring_id) — importados ou manuais
   const variableEntries = useMemo(() => entries.filter(e => !e.recurring_id), [entries]);
+  // Fixas ativas para o mês
   const activeRecurring = useMemo(() => recurring.filter(r => r.active), [recurring]);
 
   const add = async (e) => {
     e.preventDefault();
     if (!form.day) return;
-    await axios.post('/api/finance', { ...form, entrada: Number(form.entrada) || 0, saida: Number(form.saida) || 0, month, year });
+    await axios.post('/api/finance', { ...form, entrada: n(form.entrada), saida: n(form.saida), month, year });
     setForm({ day: '', description: '', entrada: '', saida: '' });
     setAdding(false);
     load();
@@ -512,20 +532,21 @@ export default function Finance() {
 
   const fmtK = v => { const a = Math.abs(v); return a >= 1000 ? `${(v / 1000).toFixed(1)}k` : v === 0 ? '0' : v.toFixed(0); };
 
-  // Gráfico inclui variáveis + recorrentes
+  // Gráfico: variáveis + recorrentes
   const cashflowData = useMemo(() => {
     const daysInMonth = new Date(year, month, 0).getDate();
     const byDay = {};
     variableEntries.forEach(e => {
       if (!byDay[e.day]) byDay[e.day] = { entrada: 0, saida: 0 };
-      byDay[e.day].entrada += (e.entrada || 0);
-      byDay[e.day].saida   += (e.saida   || 0);
+      byDay[e.day].entrada += n(e.entrada);
+      byDay[e.day].saida   += n(e.saida);
     });
     activeRecurring.forEach(r => {
-      if (r.day >= 1 && r.day <= daysInMonth) {
-        if (!byDay[r.day]) byDay[r.day] = { entrada: 0, saida: 0 };
-        byDay[r.day].entrada += (r.entrada || 0);
-        byDay[r.day].saida   += (r.saida   || 0);
+      const d = n(r.day);
+      if (d >= 1 && d <= daysInMonth) {
+        if (!byDay[d]) byDay[d] = { entrada: 0, saida: 0 };
+        byDay[d].entrada += n(r.entrada);
+        byDay[d].saida   += n(r.saida);
       }
     });
     let saldo = 0;
@@ -537,21 +558,40 @@ export default function Finance() {
     });
   }, [variableEntries, activeRecurring, month, year]);
 
-  // Tabela diária: só lançamentos variáveis, saldo só conta variáveis
+  // Tabela unificada: recorrentes + variáveis na mesma lista, ordenadas por dia
+  // Recorrentes aparecem primeiro no dia; o saldo acumula tudo
   const tableRows = useMemo(() => {
     const daysInMonth = new Date(year, month, 0).getDate();
-    const byDay = {};
+
+    const varByDay = {};
     variableEntries.forEach(e => {
-      if (!byDay[e.day]) byDay[e.day] = [];
-      byDay[e.day].push(e);
+      if (!varByDay[e.day]) varByDay[e.day] = [];
+      varByDay[e.day].push(e);
     });
+
+    const recByDay = {};
+    activeRecurring.forEach(r => {
+      const d = n(r.day);
+      if (d >= 1 && d <= daysInMonth) {
+        if (!recByDay[d]) recByDay[d] = [];
+        recByDay[d].push(r);
+      }
+    });
+
     let runSaldo = 0;
     const rows = [];
     for (let d = 1; d <= daysInMonth; d++) {
-      const dayEntries = byDay[d] || [];
-      if (dayEntries.length > 0) {
-        dayEntries.forEach(e => {
-          runSaldo += (e.entrada || 0) - (e.saida || 0);
+      const recs = recByDay[d] || [];
+      const vars = varByDay[d] || [];
+      const total = recs.length + vars.length;
+
+      if (total > 0) {
+        recs.forEach(r => {
+          runSaldo += n(r.entrada) - n(r.saida);
+          rows.push({ kind: 'recurring', rec: r, _saldo: runSaldo });
+        });
+        vars.forEach(e => {
+          runSaldo += n(e.entrada) - n(e.saida);
           rows.push({ kind: 'entry', entry: { ...e, _saldo: runSaldo } });
         });
       } else {
@@ -559,18 +599,17 @@ export default function Finance() {
       }
     }
     return rows;
-  }, [variableEntries, month, year]);
+  }, [variableEntries, activeRecurring, month, year]);
 
   const todayDay = now.getDate();
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
 
-  const varEntrada   = variableEntries.reduce((s, e) => s + (e.entrada || 0), 0);
-  const varSaida     = variableEntries.reduce((s, e) => s + (e.saida   || 0), 0);
-  const recEntrada   = activeRecurring.reduce((s, r) => s + (r.entrada || 0), 0);
-  const recSaida     = activeRecurring.reduce((s, r) => s + (r.saida   || 0), 0);
-  const totalEntrada = varEntrada + recEntrada;
-  const totalSaida   = varSaida   + recSaida;
-  const resultado    = totalEntrada - totalSaida;
+  // Totais separados: Entrada (tudo) | Saída fixa | Diário variável
+  const totalEntrada  = variableEntries.reduce((s, e) => s + n(e.entrada), 0)
+                      + activeRecurring.reduce((s, r) => s + n(r.entrada), 0);
+  const totalSaidaFixa = activeRecurring.reduce((s, r) => s + n(r.saida), 0);
+  const totalDiario    = variableEntries.reduce((s, e) => s + n(e.saida), 0);
+  const resultado      = totalEntrada - totalSaidaFixa - totalDiario;
 
   return (
     <div>
@@ -606,7 +645,7 @@ export default function Finance() {
         </form>
       )}
 
-      {/* Gráfico de fluxo */}
+      {/* Gráfico */}
       <div className="card mb-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -633,8 +672,12 @@ export default function Finance() {
         </ResponsiveContainer>
       </div>
 
-      {/* Tabela de lançamentos variáveis */}
+      {/* Tabela unificada */}
       <div className="card overflow-x-auto mb-4">
+        <div className="flex items-center gap-4 mb-3 text-xs text-gray-400">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2 rounded-sm bg-indigo-100 inline-block border border-indigo-200" /> Fixa <Repeat size={9} className="text-brand-400" /></span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2 rounded-sm bg-white inline-block border border-gray-100" /> Variável / Diário</span>
+        </div>
         <table className="w-full text-left">
           <thead>
             <tr className="text-xs text-gray-400 border-b border-gray-100">
@@ -642,17 +685,21 @@ export default function Finance() {
               <th className="table-cell font-medium">Descrição</th>
               <th className="table-cell font-medium text-green-600">Entrada</th>
               <th className="table-cell font-medium text-red-500">Saída</th>
-              <th className="table-cell font-medium">Diário</th>
+              <th className="table-cell font-medium text-orange-500">Diário</th>
               <th className="table-cell font-medium">Saldo</th>
               <th className="table-cell w-16"></th>
             </tr>
           </thead>
           <tbody>
-            {tableRows.map((row) => {
+            {tableRows.map((row, i) => {
+              if (row.kind === 'recurring') {
+                return <RecurringRow key={`rec-${row.rec.id}-${i}`} rec={row.rec} saldo={row._saldo} />;
+              }
               if (row.kind === 'entry') {
                 const isToday = isCurrentMonth && row.entry.day === todayDay;
                 return <EditableRow key={row.entry.id} entry={row.entry} onSave={save} onDelete={del} isToday={isToday} />;
               }
+              // Empty day
               const isToday = isCurrentMonth && row.day === todayDay;
               return (
                 <tr key={`day-${row.day}`} className={`transition-colors ${isToday ? 'bg-brand-50/60' : 'hover:bg-gray-50/30'}`}>
@@ -673,41 +720,6 @@ export default function Finance() {
         </table>
       </div>
 
-      {/* Despesas & Receitas Fixas */}
-      {activeRecurring.length > 0 && (
-        <div className="card mb-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Repeat size={14} className="text-brand-400" />
-            <h3 className="font-semibold text-gray-800 text-sm">Despesas & Receitas Fixas</h3>
-            <span className="text-xs text-gray-400">· não entram no fluxo diário</span>
-          </div>
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-xs text-gray-400 border-b border-gray-100">
-                <th className="table-cell font-medium">Dia</th>
-                <th className="table-cell font-medium">Descrição</th>
-                <th className="table-cell font-medium text-green-600">Entrada</th>
-                <th className="table-cell font-medium text-red-500">Saída</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...activeRecurring].sort((a, b) => a.day - b.day).map(r => (
-                <tr key={r.id} className="hover:bg-gray-50 border-b border-gray-50 last:border-0">
-                  <td className="table-cell text-gray-400">{r.day}</td>
-                  <td className="table-cell text-gray-700">{r.description}</td>
-                  <td className="table-cell text-green-600">{r.entrada > 0 ? fmt(r.entrada) : '—'}</td>
-                  <td className="table-cell text-red-500">{r.saida > 0 ? fmt(r.saida) : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="flex justify-end gap-6 pt-3 mt-2 border-t border-gray-100 text-xs">
-            {recEntrada > 0 && <span className="text-green-600 font-medium">Entradas fixas: {fmt(recEntrada)}</span>}
-            {recSaida   > 0 && <span className="text-red-500 font-medium">Saídas fixas: {fmt(recSaida)}</span>}
-          </div>
-        </div>
-      )}
-
       {/* Resumo */}
       <div className="card flex flex-wrap gap-6">
         <div>
@@ -715,8 +727,12 @@ export default function Finance() {
           <p className="text-lg font-semibold text-green-600">{fmt(totalEntrada)}</p>
         </div>
         <div>
-          <p className="text-xs text-gray-400 mb-1">Total saídas</p>
-          <p className="text-lg font-semibold text-red-500">{fmt(totalSaida)}</p>
+          <p className="text-xs text-gray-400 mb-1">Saídas fixas</p>
+          <p className="text-lg font-semibold text-red-500">{fmt(totalSaidaFixa)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-400 mb-1">Gastos diários</p>
+          <p className="text-lg font-semibold text-orange-500">{fmt(totalDiario)}</p>
         </div>
         <div>
           <p className="text-xs text-gray-400 mb-1">Performance</p>
