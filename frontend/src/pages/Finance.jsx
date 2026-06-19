@@ -221,25 +221,43 @@ function ImportModal({ onClose, month, year, onImported }) {
     return { description: rule ? rule.label : rawDesc, ruleId: rule?.id };
   };
 
+  const parseDate = (dateStr) => {
+    // DD/MM/YYYY (Nubank Brasil)
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+      const [d, m, y] = dateStr.split('/');
+      return new Date(`${y}-${m}-${d}T12:00:00`);
+    }
+    // YYYY-MM-DD (ISO)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return new Date(dateStr + 'T12:00:00');
+    }
+    return new Date(dateStr);
+  };
+
   const parseCSV = (text, rulesArr) => {
-    const clean = text.replace(/^﻿/, '');
+    const clean = text.replace(/^﻿/, '').replace(/^﻿/, '');
+    // Detecta separador: ponto-e-vírgula ou vírgula
+    const firstLine = clean.split(/\r?\n/)[0] || '';
+    const sep = firstLine.includes(';') ? ';' : ',';
     const lines = clean.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return [];
     const entries = [];
     for (let i = 1; i < lines.length; i++) {
-      const parts = parseCSVLine(lines[i]);
+      const parts = sep === ';'
+        ? lines[i].split(';').map(p => p.trim().replace(/^"|"$/g, ''))
+        : parseCSVLine(lines[i]);
       if (parts.length < 3) continue;
       const [dateStr, rawDesc, valueStr] = parts;
-      const value = parseFloat(valueStr.replace(',', '.'));
+      const value = parseFloat(valueStr.replace('.', '').replace(',', '.'));
       if (isNaN(value)) continue;
-      const date = new Date(dateStr + 'T12:00:00');
+      const date = parseDate(dateStr.trim());
       if (isNaN(date.getTime())) continue;
       if (date.getMonth() + 1 !== month || date.getFullYear() !== year) continue;
       const day = date.getDate();
       const entrada = value > 0 ? value : 0;
       const saida   = value < 0 ? Math.abs(value) : 0;
-      const { description, ruleId } = applyRules(rawDesc, rulesArr);
-      entries.push({ day, rawDesc, description, entrada, saida, ruleId, include: true, newRule: false });
+      const { description, ruleId } = applyRules(rawDesc.trim(), rulesArr);
+      entries.push({ day, rawDesc: rawDesc.trim(), description, entrada, saida, ruleId, include: true, newRule: false });
     }
     return entries.sort((a, b) => a.day - b.day);
   };
