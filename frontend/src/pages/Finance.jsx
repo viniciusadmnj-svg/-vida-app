@@ -482,20 +482,24 @@ function ImportModal({ onClose, month, year, onImported, activeRecurring }) {
                         )}
                       </td>
                       <td className="table-cell">
-                        {e.suggestion ? (
-                          <button
-                            onClick={() => setPreview(p => p.map((x, j) => j === i ? {
-                              ...x, reconciledWith: x.reconciledWith ? null : e.suggestion.id
-                            } : x))}
-                            className={`text-xs px-2 py-0.5 rounded-md border transition-colors whitespace-nowrap ${
-                              e.reconciledWith
-                                ? 'bg-brand-100 text-brand-700 border-brand-200'
-                                : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-brand-50 hover:text-brand-600 hover:border-brand-200'
-                            }`}
-                          >
-                            {e.reconciledWith ? '✓ ' : ''}{e.suggestion.description.length > 18 ? e.suggestion.description.slice(0, 18) + '…' : e.suggestion.description}
-                          </button>
-                        ) : <span className="text-gray-200 text-xs">—</span>}
+                        <select
+                          className={`text-xs border rounded-md px-1.5 py-0.5 max-w-[150px] transition-colors ${
+                            e.reconciledWith
+                              ? 'border-brand-200 bg-brand-50 text-brand-700'
+                              : 'border-gray-200 bg-gray-50 text-gray-400'
+                          }`}
+                          value={e.reconciledWith || ''}
+                          onChange={ev => setPreview(p => p.map((x, j) => j === i ? {
+                            ...x, reconciledWith: ev.target.value ? Number(ev.target.value) : null
+                          } : x))}
+                        >
+                          <option value="">— não conciliar —</option>
+                          {activeRecurring.map(r => (
+                            <option key={r.id} value={r.id}>
+                              {r.description.length > 22 ? r.description.slice(0, 22) + '…' : r.description}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                     </tr>
                   ))}
