@@ -35,14 +35,16 @@ router.post('/confirm', async (req, res) => {
     const { entries, month, year } = req.body;
     let inserted = 0;
     for (const e of entries) {
-      await db.insert('finance_entries', {
+      const row = {
         day: Number(e.day),
         description: e.description || '',
         entrada: Number(e.entrada) || 0,
         saida:   Number(e.saida)   || 0,
         month:   Number(month),
         year:    Number(year),
-      });
+      };
+      if (e.recurring_id) row.recurring_id = Number(e.recurring_id);
+      await db.insert('finance_entries', row);
       inserted++;
     }
     res.json({ ok: true, inserted });

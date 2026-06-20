@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { Plus, Trash2, X, Check, Repeat, Pencil, ToggleLeft, ToggleRight, TrendingUp, Upload, FileText, Eraser } from 'lucide-react';
+import { Plus, Trash2, X, Check, Repeat, Pencil, ToggleLeft, ToggleRight, TrendingUp, Upload, FileText, Eraser, Link2 } from 'lucide-react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
@@ -59,17 +59,21 @@ function EditableRow({ entry, onSave, onDelete, isToday }) {
     );
   }
 
+  const isReconciled = !!entry.recurring_id;
   return (
-    <tr className={`group ${isToday ? 'bg-brand-50/60' : 'hover:bg-gray-50'}`}>
+    <tr className={`group ${isToday ? 'bg-brand-50/60' : isReconciled ? 'bg-indigo-50/20 hover:bg-indigo-50/40' : 'hover:bg-gray-50'}`}>
       <td className={`table-cell font-medium ${isToday ? 'text-brand-600' : 'text-gray-500'}`}>
         {entry.day}
         {isToday && <span className="ml-1 text-[9px] bg-brand-500 text-white rounded px-1 py-0.5 font-bold align-middle">HOJE</span>}
       </td>
-      <td className="table-cell text-gray-700">{entry.description}</td>
+      <td className="table-cell text-gray-700">
+        {entry.description}
+        {isReconciled && <Link2 size={10} className="inline ml-1.5 text-brand-400 opacity-60" />}
+      </td>
       <td className="table-cell text-green-600">{n(entry.entrada) > 0 ? fmt(n(entry.entrada)) : '—'}</td>
-      <td className="table-cell text-gray-200">—</td>
-      <td className={`table-cell font-medium ${n(entry.saida) > 0 ? 'text-red-500' : 'text-gray-300'}`}>
-        {n(entry.saida) > 0 ? `-${fmt(n(entry.saida))}` : '—'}
+      <td className="table-cell text-red-500">{isReconciled && n(entry.saida) > 0 ? fmt(n(entry.saida)) : '—'}</td>
+      <td className={`table-cell font-medium ${!isReconciled && n(entry.saida) > 0 ? 'text-red-500' : 'text-gray-300'}`}>
+        {!isReconciled && n(entry.saida) > 0 ? `-${fmt(n(entry.saida))}` : '—'}
       </td>
       <td className={`table-cell font-semibold ${n(entry._saldo) < 0 ? 'text-red-500' : 'text-gray-800'}`}>{fmt(n(entry._saldo))}</td>
       <td className="table-cell">
@@ -210,7 +214,7 @@ function RecurringModal({ onClose }) {
   );
 }
 
-function ImportModal({ onClose, month, year, onImported }) {
+function ImportModal({ onClose, month, year, onImported, activeRecurring }) {
   const [rules, setRules] = useState([]);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -296,7 +300,13 @@ function ImportModal({ onClose, month, year, onImported }) {
       const entrada = value > 0 ? value : 0;
       const saida   = value < 0 ? Math.abs(value) : 0;
       const { description, ruleId } = applyRules(rawDesc.trim(), rulesArr);
-      entries.push({ day, rawDesc: rawDesc.trim(), description, entrada, saida, ruleId, include: true, newRule: false });
+      const suggestRec = activeRecurring.find(r => {
+        if (saida > 0 && n(r.saida) > 0) return Math.abs(n(r.saida) - saida) < 0.01;
+        if (entrada > 0 && n(r.entrada) > 0) return Math.abs(n(r.entrada) - entrada) < 0.01;
+        return false;
+      });
+      entries.push({ day, rawDesc: rawDesc.trim(), description, entrada, saida, ruleId, include: true, newRule: false,
+        suggestion: suggestRec || null, reconciledWith: suggestRec?.id || null });
     }
     return entries.sort((a, b) => a.day - b.day);
   };
@@ -316,7 +326,7 @@ function ImportModal({ onClose, month, year, onImported }) {
       for (const e of toSave.filter(e => e.newRule && !e.ruleId)) {
         await axios.post('/api/finance/import/rules', { pattern: e.rawDesc, label: e.description });
       }
-      await axios.post('/api/finance/import/confirm', { entries: toSave, month, year });
+      await axios.post('/api/finance/import/confirm', { entries: toSave.map(e => ({ ...e, recurring_id: e.reconciledWith || null })), month, year });
       onImported();
       onClose();
     } finally { setLoading(false); }
@@ -419,6 +429,7 @@ function ImportModal({ onClose, month, year, onImported }) {
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-gray-600">
                 <span className="font-semibold text-gray-900">{preview.length}</span> lançamentos · <span className="text-brand-600 font-medium">{includedCount} selecionados</span>
+                {(() => { const rc = preview.filter(e => e.include && e.reconciledWith).length; return rc > 0 ? <span className="text-brand-500"> · <Link2 size={11} className="inline mb-0.5" /> {rc} para conciliar</span> : null; })()}
               </p>
               <button className="text-xs text-gray-400 hover:text-gray-600 underline" onClick={() => { setPreview(null); fileRef.current.value = ''; }}>Trocar arquivo</button>
             </div>
@@ -438,6 +449,7 @@ function ImportModal({ onClose, month, year, onImported }) {
                     <th className="table-cell text-green-600 w-28">Entrada</th>
                     <th className="table-cell text-red-500 w-28">Saída</th>
                     <th className="table-cell w-16 text-center" title="Criar regra para reconhecer automaticamente">Regra</th>
+                    <th className="table-cell w-36 text-brand-500">Conciliar</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -468,6 +480,22 @@ function ImportModal({ onClose, month, year, onImported }) {
                             onChange={() => setPreview(p => p.map((x, j) => j === i ? { ...x, newRule: !x.newRule } : x))}
                             className="rounded" />
                         )}
+                      </td>
+                      <td className="table-cell">
+                        {e.suggestion ? (
+                          <button
+                            onClick={() => setPreview(p => p.map((x, j) => j === i ? {
+                              ...x, reconciledWith: x.reconciledWith ? null : e.suggestion.id
+                            } : x))}
+                            className={`text-xs px-2 py-0.5 rounded-md border transition-colors whitespace-nowrap ${
+                              e.reconciledWith
+                                ? 'bg-brand-100 text-brand-700 border-brand-200'
+                                : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-brand-50 hover:text-brand-600 hover:border-brand-200'
+                            }`}
+                          >
+                            {e.reconciledWith ? '✓ ' : ''}{e.suggestion.description.length > 18 ? e.suggestion.description.slice(0, 18) + '…' : e.suggestion.description}
+                          </button>
+                        ) : <span className="text-gray-200 text-xs">—</span>}
                       </td>
                     </tr>
                   ))}
@@ -513,10 +541,16 @@ export default function Finance() {
 
   useEffect(() => { load(); }, [month, year]);
 
-  // Lançamentos variáveis (sem recurring_id) — importados ou manuais
-  const variableEntries = useMemo(() => entries.filter(e => !e.recurring_id), [entries]);
   // Fixas ativas para o mês
-  const activeRecurring = useMemo(() => recurring.filter(r => r.active), [recurring]);
+  const activeRecurring     = useMemo(() => recurring.filter(r => r.active), [recurring]);
+  // Lançamentos do extrato já conciliados com uma fixa
+  const reconciledEntries   = useMemo(() => entries.filter(e => e.recurring_id),  [entries]);
+  // Lançamentos variáveis (sem recurring_id) — manuais ou não conciliados
+  const variableOnlyEntries = useMemo(() => entries.filter(e => !e.recurring_id), [entries]);
+  // IDs das fixas já conciliadas neste mês
+  const reconciledIds       = useMemo(() => new Set(reconciledEntries.map(e => Number(e.recurring_id))), [reconciledEntries]);
+  // Fixas ainda não conciliadas (aparecem como linhas pendentes)
+  const pendingRecurring    = useMemo(() => activeRecurring.filter(r => !reconciledIds.has(r.id)), [activeRecurring, reconciledIds]);
 
   const add = async (e) => {
     e.preventDefault();
@@ -537,16 +571,16 @@ export default function Finance() {
 
   const fmtK = v => { const a = Math.abs(v); return a >= 1000 ? `${(v / 1000).toFixed(1)}k` : v === 0 ? '0' : v.toFixed(0); };
 
-  // Gráfico: variáveis + recorrentes
+  // Gráfico: todos os lançamentos + fixas pendentes (sem dupla contagem das conciliadas)
   const cashflowData = useMemo(() => {
     const daysInMonth = new Date(year, month, 0).getDate();
     const byDay = {};
-    variableEntries.forEach(e => {
+    entries.forEach(e => {
       if (!byDay[e.day]) byDay[e.day] = { entrada: 0, saida: 0 };
       byDay[e.day].entrada += n(e.entrada);
       byDay[e.day].saida   += n(e.saida);
     });
-    activeRecurring.forEach(r => {
+    pendingRecurring.forEach(r => {
       const d = n(r.day);
       if (d >= 1 && d <= daysInMonth) {
         if (!byDay[d]) byDay[d] = { entrada: 0, saida: 0 };
@@ -561,21 +595,20 @@ export default function Finance() {
       saldo += d.entrada - d.saida;
       return { dia: day, entrada: d.entrada, saida: d.saida, saldo };
     });
-  }, [variableEntries, activeRecurring, month, year]);
+  }, [entries, pendingRecurring, month, year]);
 
-  // Tabela unificada: recorrentes + variáveis na mesma lista, ordenadas por dia
-  // Recorrentes aparecem primeiro no dia; o saldo acumula tudo
+  // Tabela unificada: fixas pendentes + todos os lançamentos (variáveis + conciliados)
   const tableRows = useMemo(() => {
     const daysInMonth = new Date(year, month, 0).getDate();
 
-    const varByDay = {};
-    variableEntries.forEach(e => {
-      if (!varByDay[e.day]) varByDay[e.day] = [];
-      varByDay[e.day].push(e);
+    const entByDay = {};
+    entries.forEach(e => {
+      if (!entByDay[e.day]) entByDay[e.day] = [];
+      entByDay[e.day].push(e);
     });
 
     const recByDay = {};
-    activeRecurring.forEach(r => {
+    pendingRecurring.forEach(r => {
       const d = n(r.day);
       if (d >= 1 && d <= daysInMonth) {
         if (!recByDay[d]) recByDay[d] = [];
@@ -587,15 +620,15 @@ export default function Finance() {
     const rows = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const recs = recByDay[d] || [];
-      const vars = varByDay[d] || [];
-      const total = recs.length + vars.length;
+      const ents = entByDay[d] || [];
+      const total = recs.length + ents.length;
 
       if (total > 0) {
         recs.forEach(r => {
           runSaldo += n(r.entrada) - n(r.saida);
           rows.push({ kind: 'recurring', rec: r, _saldo: runSaldo });
         });
-        vars.forEach(e => {
+        ents.forEach(e => {
           runSaldo += n(e.entrada) - n(e.saida);
           rows.push({ kind: 'entry', entry: { ...e, _saldo: runSaldo } });
         });
@@ -604,16 +637,17 @@ export default function Finance() {
       }
     }
     return rows;
-  }, [variableEntries, activeRecurring, month, year]);
+  }, [entries, pendingRecurring, month, year]);
 
   const todayDay = now.getDate();
   const isCurrentMonth = month === now.getMonth() + 1 && year === now.getFullYear();
 
-  // Totais separados: Entrada (tudo) | Saída fixa | Diário variável
-  const totalEntrada  = variableEntries.reduce((s, e) => s + n(e.entrada), 0)
-                      + activeRecurring.reduce((s, r) => s + n(r.entrada), 0);
-  const totalSaidaFixa = activeRecurring.reduce((s, r) => s + n(r.saida), 0);
-  const totalDiario    = variableEntries.reduce((s, e) => s + n(e.saida), 0);
+  // Totais sem dupla contagem: conciliados + pendentes
+  const totalEntrada   = entries.reduce((s, e) => s + n(e.entrada), 0)
+                       + pendingRecurring.reduce((s, r) => s + n(r.entrada), 0);
+  const totalSaidaFixa = reconciledEntries.reduce((s, e) => s + n(e.saida), 0)
+                       + pendingRecurring.reduce((s, r) => s + n(r.saida), 0);
+  const totalDiario    = variableOnlyEntries.reduce((s, e) => s + n(e.saida), 0);
   const resultado      = totalEntrada - totalSaidaFixa - totalDiario;
 
   return (
@@ -749,7 +783,7 @@ export default function Finance() {
       </div>
 
       {showRecurring && <RecurringModal onClose={() => { setShowRecurring(false); load(); }} />}
-      {showImport && <ImportModal month={month} year={year} onClose={() => setShowImport(false)} onImported={load} />}
+      {showImport && <ImportModal month={month} year={year} onClose={() => setShowImport(false)} onImported={load} activeRecurring={activeRecurring} />}
     </div>
   );
 }
