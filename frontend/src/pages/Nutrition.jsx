@@ -1,9 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import {
-  ChevronLeft, ChevronRight, Upload, FileText, Sparkles,
-  Check, X, Pencil, Trash2, Plus,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, X } from 'lucide-react';
 
 const todayISO  = () => new Date().toISOString().split('T')[0];
 const n         = v => Number(v) || 0;
@@ -13,7 +10,7 @@ const MACROS = [
   { key: 'calories',  devKey: 'dev_calories', label: 'Calorias',      unit: 'kcal' },
   { key: 'protein_g', devKey: 'dev_protein',  label: 'Proteínas',     unit: 'g'    },
   { key: 'carbs_g',   devKey: 'dev_carbs',    label: 'Carboidratos',  unit: 'g'    },
-  { key: 'fat_g',     devKey: 'dev_fat',      label: 'Gordura',       unit: 'g'    },
+  { key: 'fat_g',     devKey: 'dev_fat',       label: 'Gordura',       unit: 'g'    },
   { key: 'fiber_g',   devKey: 'dev_fiber',    label: 'Fibra',         unit: 'g'    },
   { key: 'sugar_g',   devKey: 'dev_sugar',    label: 'Açúcar',        unit: 'g'    },
 ];
@@ -51,11 +48,11 @@ function MacroBar({ label, total, meta, unit }) {
 
 // ── Meal card ─────────────────────────────────────────────────────────────────
 
-function MealCard({ meal, compliance, onUpdate, onReset, date }) {
+function MealCard({ meal, compliance, onUpdate, onReset }) {
   const status = compliance?.status ?? 'pending';
-  const [devOpen,      setDevOpen]      = useState(status === 'deviated');
-  const [devFood,      setDevFood]      = useState(compliance?.dev_food      || '');
-  const [devMacros,    setDevMacros]    = useState({
+  const [devOpen,   setDevOpen]   = useState(status === 'deviated');
+  const [devFood,   setDevFood]   = useState(compliance?.dev_food || '');
+  const [devMacros, setDevMacros] = useState({
     dev_calories: compliance?.dev_calories || '',
     dev_protein:  compliance?.dev_protein  || '',
     dev_carbs:    compliance?.dev_carbs    || '',
@@ -63,40 +60,13 @@ function MealCard({ meal, compliance, onUpdate, onReset, date }) {
     dev_fiber:    compliance?.dev_fiber    || '',
     dev_sugar:    compliance?.dev_sugar    || '',
   });
-  const [estimating, setEstimating] = useState(false);
 
-  const estimate = async () => {
-    if (!devFood.trim()) return;
-    setEstimating(true);
-    try {
-      const { data } = await axios.post('/api/meal-plans/estimate-macros', { food: devFood });
-      setDevMacros({
-        dev_calories: data.calories  ?? '',
-        dev_protein:  data.protein_g ?? '',
-        dev_carbs:    data.carbs_g   ?? '',
-        dev_fat:      data.fat_g     ?? '',
-        dev_fiber:    data.fiber_g   ?? '',
-        dev_sugar:    data.sugar_g   ?? '',
-      });
-    } finally { setEstimating(false); }
-  };
+  const saveDeviation = () => onUpdate('deviated', { dev_food: devFood, ...devMacros });
+  const markComplied  = () => { setDevOpen(false); onUpdate('complied', {}); };
+  const handleReset   = () => { setDevOpen(false); onReset(); };
 
-  const saveDeviation = () => {
-    onUpdate('deviated', { dev_food: devFood, ...devMacros });
-  };
-
-  const markComplied = () => {
-    setDevOpen(false);
-    onUpdate('complied', {});
-  };
-
-  const handleReset = () => {
-    setDevOpen(false);
-    onReset();
-  };
-
-  const isComplied  = status === 'complied';
-  const isDeviated  = status === 'deviated';
+  const isComplied = status === 'complied';
+  const isDeviated = status === 'deviated';
 
   return (
     <div className={`rounded-2xl border transition-colors ${
@@ -121,7 +91,6 @@ function MealCard({ meal, compliance, onUpdate, onReset, date }) {
           </p>
         </div>
 
-        {/* Action buttons */}
         {status === 'pending' && (
           <div className="flex gap-1.5 shrink-0">
             <button
@@ -141,7 +110,6 @@ function MealCard({ meal, compliance, onUpdate, onReset, date }) {
         )}
       </div>
 
-      {/* Deviation form */}
       {(devOpen || isDeviated) && (
         <div className="mt-3 pt-3 border-t border-red-100 space-y-2.5">
           <p className="text-xs font-medium text-gray-600">O que você comeu?</p>
@@ -151,22 +119,15 @@ function MealCard({ meal, compliance, onUpdate, onReset, date }) {
             value={devFood}
             onChange={e => setDevFood(e.target.value)}
           />
-          <button
-            onClick={estimate}
-            disabled={estimating || !devFood.trim()}
-            className="flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 disabled:opacity-40 font-medium"
-          >
-            <Sparkles size={12} />
-            {estimating ? 'Estimando…' : 'Estimar macros com IA'}
-          </button>
+          <p className="text-[11px] text-gray-400">Preencha os macros abaixo (estimativa):</p>
           <div className="grid grid-cols-3 gap-2">
             {[
-              { dk: 'dev_calories', label: 'Calorias', unit: 'kcal' },
-              { dk: 'dev_protein',  label: 'Proteínas', unit: 'g' },
+              { dk: 'dev_calories', label: 'Calorias',     unit: 'kcal' },
+              { dk: 'dev_protein',  label: 'Proteínas',    unit: 'g' },
               { dk: 'dev_carbs',    label: 'Carboidratos', unit: 'g' },
-              { dk: 'dev_fat',      label: 'Gordura', unit: 'g' },
-              { dk: 'dev_fiber',    label: 'Fibra', unit: 'g' },
-              { dk: 'dev_sugar',    label: 'Açúcar', unit: 'g' },
+              { dk: 'dev_fat',      label: 'Gordura',      unit: 'g' },
+              { dk: 'dev_fiber',    label: 'Fibra',        unit: 'g' },
+              { dk: 'dev_sugar',    label: 'Açúcar',       unit: 'g' },
             ].map(({ dk, label, unit }) => (
               <div key={dk} className="relative">
                 <input
@@ -192,150 +153,12 @@ function MealCard({ meal, compliance, onUpdate, onReset, date }) {
   );
 }
 
-// ── PDF upload modal ──────────────────────────────────────────────────────────
-
-function PdfUploadModal({ onClose, onSaved }) {
-  const [phase,   setPhase]   = useState('upload'); // upload | parsing | review
-  const [meals,   setMeals]   = useState([]);
-  const [error,   setError]   = useState('');
-  const [saving,  setSaving]  = useState(false);
-  const fileRef = useRef();
-
-  const handleFile = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setPhase('parsing');
-    setError('');
-    try {
-      const form = new FormData();
-      form.append('pdf', file);
-      const { data } = await axios.post('/api/meal-plans/parse-pdf', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setMeals(data.meals.map((m, i) => ({ ...m, _id: i })));
-      setPhase('review');
-    } catch (err) {
-      setError(err.response?.data?.error || 'Erro ao processar PDF');
-      setPhase('upload');
-    }
-  };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      await axios.post('/api/meal-plans/bulk', { meals });
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Erro ao salvar');
-    } finally { setSaving(false); }
-  };
-
-  const updateMeal = (i, field, val) =>
-    setMeals(ms => ms.map((m, j) => j === i ? { ...m, [field]: val } : m));
-
-  return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-      <div className="card w-full max-w-3xl max-h-[90vh] flex flex-col shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Upload size={16} className="text-brand-500" />
-            <h2 className="font-semibold text-gray-900">Importar cardápio — PDF</h2>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
-        </div>
-
-        {phase === 'upload' && (
-          <div className="flex flex-col items-center gap-4 py-10">
-            <div className="w-16 h-16 rounded-2xl bg-brand-50 flex items-center justify-center">
-              <FileText size={28} className="text-brand-400" />
-            </div>
-            <div className="text-center">
-              <p className="font-medium text-gray-800 mb-1">Envie o PDF do seu cardápio</p>
-              <p className="text-xs text-gray-400">A IA vai ler e extrair cada refeição com os macros</p>
-              {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
-            </div>
-            <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleFile} />
-            <button className="btn-primary" onClick={() => fileRef.current?.click()}>Escolher PDF</button>
-          </div>
-        )}
-
-        {phase === 'parsing' && (
-          <div className="flex flex-col items-center gap-3 py-12">
-            <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-gray-500 text-sm">Lendo o cardápio…</p>
-          </div>
-        )}
-
-        {phase === 'review' && (
-          <>
-            <p className="text-xs text-gray-400 mb-3">
-              <span className="font-semibold text-gray-700">{meals.length}</span> refeições encontradas. Revise e ajuste se necessário.
-            </p>
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {meals.map((m, i) => (
-                <div key={m._id} className="border border-gray-100 rounded-xl p-3 bg-gray-50/60">
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      className="input py-1 text-sm w-36 shrink-0"
-                      placeholder="Refeição"
-                      value={m.meal_type}
-                      onChange={e => updateMeal(i, 'meal_type', e.target.value)}
-                    />
-                    <input
-                      className="input py-1 text-sm flex-1"
-                      placeholder="O que comer"
-                      value={m.description}
-                      onChange={e => updateMeal(i, 'description', e.target.value)}
-                    />
-                    <button onClick={() => setMeals(ms => ms.filter((_, j) => j !== i))} className="text-gray-300 hover:text-red-400 p-1">
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-6 gap-1.5">
-                    {[
-                      { f: 'calories',  u: 'kcal' },
-                      { f: 'protein_g', u: 'g Prot' },
-                      { f: 'carbs_g',   u: 'g Carb' },
-                      { f: 'fat_g',     u: 'g Gord' },
-                      { f: 'fiber_g',   u: 'g Fibra' },
-                      { f: 'sugar_g',   u: 'g Açúcar' },
-                    ].map(({ f, u }) => (
-                      <div key={f} className="relative">
-                        <input
-                          type="number" step="0.1" min="0"
-                          className="input py-1 text-xs pr-1 w-full text-right"
-                          value={m[f] || ''}
-                          onChange={e => updateMeal(i, f, e.target.value)}
-                        />
-                        <span className="absolute -top-2 left-1 text-[9px] text-gray-400">{u}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
-            <div className="flex gap-2 pt-3 border-t border-gray-100 mt-3">
-              <button className="btn-ghost text-sm" onClick={() => setPhase('upload')}>Trocar PDF</button>
-              <button className="btn-primary ml-auto text-sm" onClick={save} disabled={saving || meals.length === 0}>
-                {saving ? 'Salvando…' : `Salvar ${meals.length} refeições`}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── Main macro panel ──────────────────────────────────────────────────────────
 
 export default function Nutrition() {
   const [date,       setDate]       = useState(todayISO());
   const [mealPlans,  setMealPlans]  = useState([]);
   const [compliance, setCompliance] = useState([]);
-  const [showUpload, setShowUpload] = useState(false);
 
   const loadAll = async () => {
     const [plansRes, compRes] = await Promise.all([
@@ -348,13 +171,11 @@ export default function Nutrition() {
 
   useEffect(() => { loadAll(); }, [date]);
 
-  // Compliance keyed by meal_plan_id for O(1) lookup
   const compByMeal = useMemo(() =>
     Object.fromEntries(compliance.map(c => [c.meal_plan_id, c])),
     [compliance]
   );
 
-  // Plan totals (full day if everything followed)
   const planTotals = useMemo(() =>
     MACROS.reduce((acc, m) => {
       acc[m.key] = mealPlans.reduce((s, p) => s + n(p[m.key]), 0);
@@ -363,7 +184,6 @@ export default function Nutrition() {
     [mealPlans]
   );
 
-  // Consumed totals from compliance records
   const consumed = useMemo(() =>
     MACROS.reduce((acc, m) => {
       acc[m.key] = compliance.reduce((s, c) => {
@@ -403,34 +223,14 @@ export default function Nutrition() {
     if (c?.id) { await axios.delete(`/api/compliance/${c.id}`); loadAll(); }
   };
 
-  const hasPlan = mealPlans.length > 0;
-
   return (
     <div>
-      {/* Page header */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Alimentação</h1>
-        <button
-          onClick={() => setShowUpload(true)}
-          className="btn-ghost flex items-center gap-1.5 border border-brand-500/30 text-brand-500 hover:bg-brand-500/5"
-        >
-          <Upload size={14} /> {hasPlan ? 'Atualizar cardápio' : 'Importar cardápio (PDF)'}
-        </button>
+        <p className="text-xs text-gray-400 mt-0.5">Cardápio do nutricionista Gustavo Fonseca</p>
       </div>
 
-      {/* No meal plan CTA */}
-      {!hasPlan && (
-        <div className="card text-center py-12 mb-6">
-          <FileText size={36} className="mx-auto text-gray-300 mb-3" />
-          <p className="font-medium text-gray-700 mb-1">Nenhum cardápio importado</p>
-          <p className="text-sm text-gray-400 mb-4">Faça upload do PDF do seu cardápio e a IA extrai cada refeição com os macros automaticamente.</p>
-          <button onClick={() => setShowUpload(true)} className="btn-primary mx-auto">
-            <Upload size={14} className="inline mr-1.5" /> Importar cardápio
-          </button>
-        </div>
-      )}
-
-      {hasPlan && (
+      {mealPlans.length > 0 && (
         <div className="card mb-6">
           {/* Date nav */}
           <div className="flex items-center justify-between mb-5">
@@ -450,11 +250,9 @@ export default function Nutrition() {
                 <ChevronRight size={16} />
               </button>
             </div>
-            <div className="text-right">
-              <p className="text-[10px] text-gray-400">
-                {compliance.filter(c => c.status === 'complied').length}/{mealPlans.length} refeições cumpridas
-              </p>
-            </div>
+            <p className="text-[10px] text-gray-400">
+              {compliance.filter(c => c.status === 'complied').length}/{mealPlans.length} refeições cumpridas
+            </p>
           </div>
 
           {/* Macro bars */}
@@ -483,13 +281,6 @@ export default function Nutrition() {
             ))}
           </div>
         </div>
-      )}
-
-      {showUpload && (
-        <PdfUploadModal
-          onClose={() => setShowUpload(false)}
-          onSaved={() => { loadAll(); setShowUpload(false); }}
-        />
       )}
     </div>
   );
