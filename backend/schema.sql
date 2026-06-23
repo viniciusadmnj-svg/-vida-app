@@ -108,6 +108,37 @@ CREATE TABLE IF NOT EXISTS finance_rules (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS meal_plans (
+  id          SERIAL PRIMARY KEY,
+  meal_type   TEXT    NOT NULL DEFAULT '',
+  description TEXT    NOT NULL DEFAULT '',
+  calories    NUMERIC NOT NULL DEFAULT 0,
+  protein_g   NUMERIC NOT NULL DEFAULT 0,
+  carbs_g     NUMERIC NOT NULL DEFAULT 0,
+  fat_g       NUMERIC NOT NULL DEFAULT 0,
+  fiber_g     NUMERIC NOT NULL DEFAULT 0,
+  sugar_g     NUMERIC NOT NULL DEFAULT 0,
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS daily_compliance (
+  id           SERIAL PRIMARY KEY,
+  date         TEXT    NOT NULL,
+  meal_plan_id INTEGER REFERENCES meal_plans(id) ON DELETE CASCADE,
+  status       TEXT    NOT NULL DEFAULT 'complied',
+  dev_food     TEXT    NOT NULL DEFAULT '',
+  dev_calories NUMERIC NOT NULL DEFAULT 0,
+  dev_protein  NUMERIC NOT NULL DEFAULT 0,
+  dev_carbs    NUMERIC NOT NULL DEFAULT 0,
+  dev_fat      NUMERIC NOT NULL DEFAULT 0,
+  dev_fiber    NUMERIC NOT NULL DEFAULT 0,
+  dev_sugar    NUMERIC NOT NULL DEFAULT 0,
+  month        INTEGER NOT NULL DEFAULT 0,
+  year         INTEGER NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS macro_goals (
   id         SERIAL PRIMARY KEY,
   calories   NUMERIC NOT NULL DEFAULT 0,
