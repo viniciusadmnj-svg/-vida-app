@@ -17,6 +17,7 @@ app.use('/api/finance/import',    require('./routes/finance_import'));
 app.use('/api/finance/recurring', require('./routes/finance_recurring'));
 app.use('/api/finance',           require('./routes/finance'));
 app.use('/api/nutrition',         require('./routes/nutrition'));
+app.use('/api/macros',            require('./routes/macros'));
 app.use('/api/diet-plan',         require('./routes/diet_plan'));
 app.use('/api/work',              require('./routes/work'));
 

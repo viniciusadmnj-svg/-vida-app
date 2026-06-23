@@ -107,3 +107,29 @@ CREATE TABLE IF NOT EXISTS finance_rules (
   label       TEXT    NOT NULL DEFAULT '',
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS macro_goals (
+  id         SERIAL PRIMARY KEY,
+  calories   NUMERIC NOT NULL DEFAULT 0,
+  protein_g  NUMERIC NOT NULL DEFAULT 0,
+  carbs_g    NUMERIC NOT NULL DEFAULT 0,
+  fat_g      NUMERIC NOT NULL DEFAULT 0,
+  fiber_g    NUMERIC NOT NULL DEFAULT 0,
+  sugar_g    NUMERIC NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS macro_logs (
+  id         SERIAL PRIMARY KEY,
+  date       TEXT    NOT NULL,
+  meal_name  TEXT    NOT NULL DEFAULT '',
+  calories   NUMERIC NOT NULL DEFAULT 0,
+  protein_g  NUMERIC NOT NULL DEFAULT 0,
+  carbs_g    NUMERIC NOT NULL DEFAULT 0,
+  fat_g      NUMERIC NOT NULL DEFAULT 0,
+  fiber_g    NUMERIC NOT NULL DEFAULT 0,
+  sugar_g    NUMERIC NOT NULL DEFAULT 0,
+  month      INTEGER NOT NULL,
+  year       INTEGER NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);

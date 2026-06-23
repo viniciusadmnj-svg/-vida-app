@@ -1,10 +1,268 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Trash2, X, Check, ChevronDown, BookOpen, Pencil, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, X, Check, ChevronDown, ChevronLeft, ChevronRight, BookOpen, Pencil, AlertCircle, Target } from 'lucide-react';
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-const today = () => new Date().toISOString().split('T')[0];
+const todayISO = () => new Date().toISOString().split('T')[0];
 const fmtDate = (d) => new Date(d + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
+const n = v => Number(v) || 0;
+
+// ── Macros ────────────────────────────────────────────────────────────────────
+
+const MACROS_DEF = [
+  { key: 'calories',  label: 'Calorias',      unit: 'kcal' },
+  { key: 'protein_g', label: 'Proteínas',     unit: 'g'    },
+  { key: 'carbs_g',   label: 'Carboidratos',  unit: 'g'    },
+  { key: 'fat_g',     label: 'Gordura',       unit: 'g'    },
+  { key: 'fiber_g',   label: 'Fibra',         unit: 'g'    },
+  { key: 'sugar_g',   label: 'Açúcar',        unit: 'g'    },
+];
+
+function MacroGoalsModal({ goals, onClose, onSaved }) {
+  const [form, setForm] = useState(
+    Object.fromEntries(MACROS_DEF.map(m => [m.key, goals[m.key] || '']))
+  );
+
+  const save = async (e) => {
+    e.preventDefault();
+    await axios.put('/api/macros/goals', form);
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+      <div className="card w-full max-w-sm shadow-xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-gray-900">Metas Diárias</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={16} /></button>
+        </div>
+        <form onSubmit={save} className="space-y-2.5">
+          {MACROS_DEF.map(({ key, label, unit }) => (
+            <div key={key} className="flex items-center gap-3">
+              <label className="w-28 text-sm text-gray-600 shrink-0">{label}</label>
+              <input
+                className="input flex-1"
+                type="number" step="0.1" min="0"
+                placeholder={`Meta em ${unit}`}
+                value={form[key]}
+                onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+              />
+              <span className="text-xs text-gray-400 w-8 shrink-0">{unit}</span>
+            </div>
+          ))}
+          <div className="flex gap-2 pt-2">
+            <button type="submit" className="btn-primary flex-1">Salvar metas</button>
+            <button type="button" onClick={onClose} className="btn-ghost">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function MacroRow({ label, total, meta, unit }) {
+  const pct      = meta > 0 ? Math.min((total / meta) * 100, 100) : 0;
+  const saldo    = meta - total;
+  const isOver   = saldo < 0;
+  const barColor = isOver ? 'bg-red-400' : pct >= 90 ? 'bg-amber-400' : 'bg-green-400';
+
+  return (
+    <div className="grid grid-cols-[1fr_48px_48px_64px] items-center gap-x-3 py-2.5 border-b border-gray-50 last:border-0">
+      <div>
+        <p className="text-sm text-gray-700 mb-1.5">{label}</p>
+        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+      <span className="text-xs font-semibold text-gray-800 text-right">{Math.round(total)}</span>
+      <span className="text-xs text-gray-400 text-right">{Math.round(meta)}</span>
+      <span className={`text-xs font-medium text-right ${isOver ? 'text-red-500' : 'text-gray-500'}`}>
+        {isOver ? `−${Math.round(Math.abs(saldo))}` : `+${Math.round(saldo)}`}
+        <span className="text-gray-300 ml-0.5">{unit}</span>
+      </span>
+    </div>
+  );
+}
+
+function MacroPanel() {
+  const [date,      setDate]      = useState(todayISO());
+  const [goals,     setGoals]     = useState({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 });
+  const [logs,      setLogs]      = useState([]);
+  const [showGoals, setShowGoals] = useState(false);
+  const [adding,    setAdding]    = useState(false);
+  const [form,      setForm]      = useState(
+    Object.fromEntries([{ key: 'meal_name' }, ...MACROS_DEF].map(m => [m.key, '']))
+  );
+
+  const loadAll = async () => {
+    const [gr, lr] = await Promise.all([
+      axios.get('/api/macros/goals'),
+      axios.get(`/api/macros?date=${date}`),
+    ]);
+    setGoals(gr.data);
+    setLogs(lr.data);
+  };
+
+  useEffect(() => { loadAll(); }, [date]);
+
+  const totals = MACROS_DEF.reduce((acc, m) => {
+    acc[m.key] = logs.reduce((s, l) => s + n(l[m.key]), 0);
+    return acc;
+  }, {});
+
+  const hasGoals = MACROS_DEF.some(m => n(goals[m.key]) > 0);
+
+  const addLog = async (e) => {
+    e.preventDefault();
+    const d = new Date(date + 'T12:00:00');
+    await axios.post('/api/macros', { ...form, date, month: d.getMonth() + 1, year: d.getFullYear() });
+    setForm(Object.fromEntries([{ key: 'meal_name' }, ...MACROS_DEF].map(m => [m.key, ''])));
+    setAdding(false);
+    loadAll();
+  };
+
+  const delLog = async (id) => { await axios.delete(`/api/macros/${id}`); loadAll(); };
+
+  const shiftDay = (delta) => {
+    const d = new Date(date + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    setDate(d.toISOString().split('T')[0]);
+  };
+
+  const isToday   = date === todayISO();
+  const dateLabel = isToday
+    ? 'Hoje'
+    : new Date(date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' });
+
+  return (
+    <div className="card mb-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <button onClick={() => shiftDay(-1)} className="text-gray-400 hover:text-gray-700 p-1 rounded-lg hover:bg-gray-100">
+            <ChevronLeft size={16} />
+          </button>
+          <div className="text-center min-w-28">
+            <p className="text-[10px] text-gray-400 uppercase tracking-wide leading-none mb-0.5">Macros do dia</p>
+            <p className="font-semibold text-gray-900 text-sm capitalize">{dateLabel}</p>
+          </div>
+          <button
+            onClick={() => shiftDay(1)}
+            disabled={isToday}
+            className="text-gray-400 hover:text-gray-700 p-1 rounded-lg hover:bg-gray-100 disabled:opacity-20 disabled:cursor-not-allowed"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+        <button
+          onClick={() => setShowGoals(true)}
+          className="text-xs text-brand-500 hover:text-brand-600 flex items-center gap-1 hover:underline"
+        >
+          <Target size={12} />
+          {hasGoals ? 'Editar metas' : 'Definir metas'}
+        </button>
+      </div>
+
+      {!hasGoals ? (
+        <div className="text-center py-6 text-gray-400 text-sm">
+          <Target size={28} className="mx-auto mb-2 opacity-30" />
+          <p>Defina suas metas diárias para visualizar o progresso.</p>
+          <button onClick={() => setShowGoals(true)} className="mt-3 btn-ghost text-xs border border-gray-200 mx-auto">
+            Definir metas agora
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Column headers */}
+          <div className="grid grid-cols-[1fr_48px_48px_64px] gap-x-3 mb-0.5">
+            <span />
+            <span className="text-[10px] text-gray-400 text-right">Total</span>
+            <span className="text-[10px] text-gray-400 text-right">Meta</span>
+            <span className="text-[10px] text-gray-400 text-right">Saldo</span>
+          </div>
+          {MACROS_DEF.map(m => (
+            <MacroRow key={m.key} label={m.label} unit={m.unit} total={totals[m.key]} meta={n(goals[m.key])} />
+          ))}
+        </>
+      )}
+
+      {/* Logged meals */}
+      {logs.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-gray-100">
+          <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-2">Refeições registradas</p>
+          <div className="space-y-1">
+            {logs.map(log => (
+              <div key={log.id} className="flex items-center justify-between group py-1.5 px-2 rounded-lg hover:bg-gray-50">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-700">{log.meal_name || 'Refeição'}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {n(log.calories) > 0 && <span className="mr-2">{Math.round(n(log.calories))} kcal</span>}
+                    P {Math.round(n(log.protein_g))}g &nbsp;·&nbsp;
+                    C {Math.round(n(log.carbs_g))}g &nbsp;·&nbsp;
+                    G {Math.round(n(log.fat_g))}g
+                  </p>
+                </div>
+                <button
+                  onClick={() => delLog(log.id)}
+                  className="text-gray-200 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Add meal form */}
+      {adding ? (
+        <form onSubmit={addLog} className="mt-4 pt-3 border-t border-gray-100 space-y-3">
+          <input
+            className="input text-sm"
+            placeholder="Nome da refeição (ex: Almoço, Lanche…)"
+            value={form.meal_name}
+            onChange={e => setForm(f => ({ ...f, meal_name: e.target.value }))}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            {MACROS_DEF.map(({ key, label, unit }) => (
+              <div key={key} className="relative">
+                <input
+                  className="input text-sm pr-10"
+                  type="number" step="0.1" min="0"
+                  placeholder={label}
+                  value={form[key]}
+                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">{unit}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" className="btn-primary">Adicionar</button>
+            <button type="button" onClick={() => setAdding(false)} className="btn-ghost">Cancelar</button>
+          </div>
+        </form>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="btn-ghost flex items-center gap-1.5 mt-3 text-sm border border-gray-200"
+        >
+          <Plus size={14} /> Registrar refeição
+        </button>
+      )}
+
+      {showGoals && (
+        <MacroGoalsModal goals={goals} onClose={() => setShowGoals(false)} onSaved={loadAll} />
+      )}
+    </div>
+  );
+}
+
+// ── Compliance (cardápio) ─────────────────────────────────────────────────────
 
 function CardapioModal({ onClose }) {
   const [items, setItems] = useState([]);
@@ -87,7 +345,7 @@ function CardapioModal({ onClose }) {
 }
 
 function QuickLog({ dietPlan, onLogged }) {
-  const [date, setDate] = useState(today());
+  const [date, setDate] = useState(todayISO());
   const [mode, setMode] = useState(null);
   const [notes, setNotes] = useState('');
   const [customFood, setCustomFood] = useState('');
@@ -112,9 +370,9 @@ function QuickLog({ dietPlan, onLogged }) {
   };
 
   return (
-    <div className="card mb-6">
+    <div className="card mb-4">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h2 className="font-semibold text-gray-900 text-sm">Registrar dia</h2>
+        <h2 className="font-semibold text-gray-900 text-sm">Registro do cardápio</h2>
         <div className="flex items-center gap-2">
           <input className="input w-36 py-1.5 text-sm" type="date" value={date} onChange={e => setDate(e.target.value)} />
           {dietPlan.length > 0 && (
@@ -228,12 +486,14 @@ function EntryTypeLabel({ type }) {
   return <span className="text-xs text-gray-400">Personalizado</span>;
 }
 
+// ── Page ─────────────────────────────────────────────────────────────────────
+
 export default function Nutrition() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
-  const [entries, setEntries] = useState([]);
-  const [dietPlan, setDietPlan] = useState([]);
+  const [year,  setYear]  = useState(now.getFullYear());
+  const [entries,   setEntries]   = useState([]);
+  const [dietPlan,  setDietPlan]  = useState([]);
   const [showCardapio, setShowCardapio] = useState(false);
 
   const load = async () => {
@@ -287,8 +547,13 @@ export default function Nutrition() {
         </div>
       )}
 
+      {/* Macro tracker */}
+      <MacroPanel />
+
+      {/* Compliance quick-log */}
       <QuickLog dietPlan={dietPlan} onLogged={load} />
 
+      {/* Monthly summary */}
       {entries.length > 0 && (
         <div className="grid grid-cols-3 gap-3 mb-6">
           <div className="card text-center">
@@ -308,7 +573,7 @@ export default function Nutrition() {
 
       {sortedDates.length === 0 ? (
         <div className="text-center py-12 text-gray-400">
-          <p>Nenhum registro em {MONTHS[month - 1]} {year}.</p>
+          <p>Nenhum registro no cardápio em {MONTHS[month - 1]} {year}.</p>
           <p className="text-sm mt-1">Use os botões acima para começar a rastrear.</p>
         </div>
       ) : (
