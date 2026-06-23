@@ -61,7 +61,8 @@ router.post('/parse-pdf', upload.single('pdf'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
 
-    const pdfParse = require('pdf-parse');
+    // v1.1.1 subpath avoids the startup test-file read; v2 dropped this path
+    const pdfParse = require('pdf-parse/lib/pdf-parse');
     const { text } = await pdfParse(req.file.buffer);
     if (!text?.trim()) return res.status(400).json({ error: 'Não foi possível extrair texto do PDF' });
 
