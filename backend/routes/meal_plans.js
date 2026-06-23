@@ -1,15 +1,17 @@
-const express   = require('express');
-const router    = express.Router();
-const db        = require('../db');
-const multer    = require('multer');
-const pdfParse  = require('pdf-parse');
-const Anthropic = require('@anthropic-ai/sdk');
+const express = require('express');
+const router  = express.Router();
+const db      = require('../db');
+const multer  = require('multer');
+
+// pdf-parse and @anthropic-ai/sdk are loaded lazily inside handlers
+// to avoid startup crashes (pdf-parse reads a test file on require)
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 const n = v => Number(v) || 0;
 
 const getClient = () => {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY não configurada no servidor');
+  const { default: Anthropic } = require('@anthropic-ai/sdk');
   return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 };
 
@@ -58,6 +60,9 @@ router.delete('/:id', async (req, res) => {
 router.post('/parse-pdf', upload.single('pdf'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+
+    // Lazy-load pdf-parse to avoid startup test-file read bug
+    const pdfParse = require('pdf-parse/lib/pdf-parse');
     const { text } = await pdfParse(req.file.buffer);
     if (!text?.trim()) return res.status(400).json({ error: 'Não foi possível extrair texto do PDF' });
 
@@ -86,7 +91,7 @@ ${text.slice(0, 8000)}`,
       }],
     });
 
-    const raw = msg.content[0].text.trim();
+    const raw   = msg.content[0].text.trim();
     const match = raw.match(/\[[\s\S]*\]/);
     if (!match) return res.status(500).json({ error: 'Claude não retornou JSON válido' });
     res.json({ meals: JSON.parse(match[0]) });
@@ -112,7 +117,7 @@ Retorne SOMENTE JSON: {"calories":N,"protein_g":N,"carbs_g":N,"fat_g":N,"fiber_g
       }],
     });
 
-    const raw = msg.content[0].text.trim();
+    const raw   = msg.content[0].text.trim();
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return res.status(500).json({ error: 'Não foi possível estimar' });
     res.json(JSON.parse(match[0]));
